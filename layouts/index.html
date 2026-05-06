@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Thrift - Choose Your Design</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      padding: 24px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 12px;
+      font-size: 2.5rem;
+    }
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin-bottom: 48px;
+      font-size: 1.1rem;
+    }
+    .layouts {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+    .layout-card {
+      background: white;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+    .layout-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+    }
+    .layout-preview {
+      height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+      font-weight: 800;
+    }
+    .layout-1 .layout-preview { background: #ffffff; color: #000; border-bottom: 1px solid #f0f0f0; }
+    .layout-2 .layout-preview { background: linear-gradient(135deg, #0a0e27, #1a1f3a); color: #00d4ff; }
+    .layout-3 .layout-preview { background: #faf7f2; color: #8b6f47; font-family: 'Georgia', serif; }
+    .layout-4 .layout-preview { background: linear-gradient(135deg, #fff5e6, #ffe6f0); color: #ff6b35; }
+    .layout-info {
+      padding: 24px;
+    }
+    .layout-info h3 {
+      font-size: 1.3rem;
+      margin-bottom: 8px;
+    }
+    .layout-info p {
+      color: #666;
+      font-size: 0.95rem;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    .layout-info .label {
+      display: inline-block;
+      background: #f0f0f0;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      color: #666;
+      margin-bottom: 12px;
+    }
+    .btn-view {
+      display: inline-block;
+      background: #000;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 700;
+      transition: all 0.3s;
+    }
+    .btn-view:hover {
+      background: #333;
+    }
+    .layout-2 .btn-view {
+      background: #00d4ff;
+      color: #000;
+    }
+    .layout-3 .btn-view {
+      background: #8b6f47;
+      color: white;
+    }
+    .layout-4 .btn-view {
+      background: #ff6b35;
+      color: white;
+    }
+    @media (max-width: 768px) {
+      h1 { font-size: 1.8rem; }
+      .layouts { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Thrift Design System</h1>
+  <p class="subtitle">Pick your favorite layout. View on phone to see responsive design.</p>
+
+  <div class="layouts">
+    <div class="layout-card layout-1">
+      <div class="layout-preview">Thrift</div>
+      <div class="layout-info">
+        <h3>Minimalist Clean</h3>
+        <span class="label">⚪ Pure & Simple</span>
+        <p>White background, lots of whitespace. Zen-like, premium, understated elegance.</p>
+        <a href="layout1-clean.html" class="btn-view">View Full Design</a>
+      </div>
+    </div>
+
+    <div class="layout-card layout-2">
+      <div class="layout-preview">◆ Thrift</div>
+      <div class="layout-info">
+        <h3>Modern Dark</h3>
+        <span class="label">🌙 Tech Vibe</span>
+        <p>Dark navy with cyan accents. Sleek, modern, high-tech feel. Premium SaaS.</p>
+        <a href="layout2-dark.html" class="btn-view">View Full Design</a>
+      </div>
+    </div>
+
+    <div class="layout-card layout-3">
+      <div class="layout-preview">THRIFT</div>
+      <div class="layout-info">
+        <h3>Warm Minimal</h3>
+        <span class="label">🌾 Elegant</span>
+        <p>Beige & gold tones with serif fonts. Sophisticated, upscale, timeless.</p>
+        <a href="layout3-warm.html" class="btn-view">View Full Design</a>
+      </div>
+    </div>
+
+    <div class="layout-card layout-4">
+      <div class="layout-preview">⚡ THRIFT</div>
+      <div class="layout-info">
+        <h3>Bold Modern</h3>
+        <span class="label">🚀 Energetic</span>
+        <p>Colorful gradients with bold accents. Fun, accessible, playful yet serious.</p>
+        <a href="layout4-bold.html" class="btn-view">View Full Design</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align: center; margin-top: 60px; color: #999; font-size: 0.9rem;">
+    <p>📱 Open this page on your phone to see responsive layouts</p>
+    <p style="margin-top: 12px;">Once you choose, reply with the number (1, 2, 3, or 4)</p>
+  </div>
+</div>
+</body>
+</html>
