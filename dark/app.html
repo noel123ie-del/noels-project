@@ -3,101 +3,82 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Noel - Smart Spending Tracker</title>
+  <title>Noel - Budget Tracker</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #1a1a2e;
-      color: #e0e0e0;
-      line-height: 1.6;
-    }
-    header {
-      background: #16213e;
-      border-bottom: 2px solid #00d4aa;
-      padding: 16px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 4px 20px rgba(0, 212, 170, 0.1);
-    }
-    .logo { font-size: 1.3rem; font-weight: 800; color: #00d4aa; }
-    nav { display: flex; gap: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 0 24px; background: #16213e; }
-    nav button { border: none; background: none; padding: 12px 16px; color: #8892b0; cursor: pointer; border-bottom: 3px solid transparent; font-weight: 600; }
-    nav button.active { color: #00d4aa; border-bottom-color: #00d4aa; }
-    .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
-    .month-header { font-size: 2rem; font-weight: 800; color: #fff; margin-bottom: 24px; }
-    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px; }
-    .stat-card {
-      background: linear-gradient(135deg, #16213e, #0f3460);
-      border: 1px solid rgba(255,255,255,0.1);
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-    }
-    .stat-card.income { border-left: 4px solid #00d4aa; }
-    .stat-card.expense { border-left: 4px solid #ff6b9d; }
-    .stat-card.balance { border-left: 4px solid #4caf50; }
-    .stat-label { font-size: 0.85rem; color: #8892b0; text-transform: uppercase; margin-bottom: 8px; }
-    .stat-value { font-size: 2rem; font-weight: 800; color: #fff; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; color: #2c3e50; line-height: 1.6; }
+    header { background: white; border-bottom: 1px solid #e5e7eb; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
+    .logo { font-size: 1.2rem; font-weight: 800; color: #667eea; }
+    nav { background: white; border-bottom: 1px solid #e5e7eb; padding: 0 24px; display: flex; gap: 32px; }
+    nav button { border: none; background: none; padding: 12px 0; color: #8fa3b8; cursor: pointer; border-bottom: 3px solid transparent; font-weight: 600; font-size: 0.9rem; }
+    nav button.active { color: #667eea; border-bottom-color: #667eea; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
     .section { display: none; }
-    .section.active { display: block; animation: fadeIn 0.3s; }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .form-section {
-      background: linear-gradient(135deg, #16213e, #0f3460);
-      border: 1px solid rgba(255,255,255,0.1);
-      padding: 24px;
-      border-radius: 12px;
-      margin-bottom: 24px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-    }
-    .form-section h3 { font-size: 1.2rem; margin-bottom: 16px; color: #fff; }
-    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px; }
+    .section.active { display: block; }
+
+    /* Dashboard */
+    .week-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .week-dates { font-size: 0.9rem; color: #8fa3b8; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .stat-card { background: white; padding: 24px; border-radius: 12px; border: 1px solid #e5e7eb; }
+    .stat-card.primary { border-left: 4px solid #667eea; }
+    .stat-card.danger { border-left: 4px solid #e74c3c; }
+    .stat-card.success { border-left: 4px solid #27ae60; }
+    .stat-label { font-size: 0.85rem; color: #8fa3b8; text-transform: uppercase; margin-bottom: 8px; }
+    .stat-value { font-size: 2rem; font-weight: 800; color: #2c3e50; }
+
+    /* Forms */
+    .form-card { background: white; padding: 24px; border-radius: 12px; border: 1px solid #e5e7eb; margin-bottom: 24px; }
+    .form-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 16px; }
     .form-group { display: flex; flex-direction: column; }
-    .form-group label { font-size: 0.85rem; color: #8892b0; margin-bottom: 6px; text-transform: uppercase; }
-    .form-group input, .form-group select { padding: 10px 12px; border: 1px solid #444; background: #0f3460; color: #e0e0e0; border-radius: 8px; font-family: inherit; }
-    .form-group input:focus, .form-group select:focus { outline: none; border-color: #00d4aa; box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.1); }
-    .btn-primary { background: linear-gradient(135deg, #00d4aa, #00a881); color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; cursor: pointer; }
-    .btn-primary:hover { opacity: 0.9; }
-    .category-budget-card {
-      background: rgba(0, 212, 170, 0.05);
-      border: 1px solid rgba(0, 212, 170, 0.2);
-      padding: 16px;
-      border-radius: 8px;
-      margin-bottom: 12px;
-    }
-    .category-budget-card.over { border-color: #ff6b9d; background: rgba(255, 107, 157, 0.05); }
+    .form-group label { font-size: 0.8rem; color: #8fa3b8; margin-bottom: 6px; font-weight: 600; }
+    .form-group input, .form-group select { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.95rem; font-family: inherit; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+
+    .btn { padding: 12px 24px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.95rem; transition: all 0.2s; }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-primary:hover { background: #5568d3; transform: translateY(-2px); }
+    .btn-secondary { background: white; border: 2px solid #667eea; color: #667eea; }
+
+    /* Toggle Buttons */
+    .toggle-group { display: flex; gap: 8px; margin-bottom: 16px; }
+    .toggle-btn { flex: 1; padding: 10px; border: 2px solid #e5e7eb; background: white; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    .toggle-btn.active { background: #667eea; color: white; border-color: #667eea; }
+
+    /* Category Budgets */
+    .category-item { background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 12px; }
+    .category-item.over { background: #fee; }
     .category-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
-    .category-name { font-weight: 600; color: #fff; }
-    .category-spent { color: #ff6b9d; font-weight: 700; }
-    .progress-bar { width: 100%; background: #333; height: 8px; border-radius: 4px; overflow: hidden; margin: 8px 0; }
-    .progress-fill { height: 100%; transition: width 0.3s; }
-    .category-info { display: flex; justify-content: space-between; font-size: 0.85rem; color: #8892b0; }
-    .transaction-item {
-      padding: 12px 16px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .transaction-desc { font-weight: 600; color: #e0e0e0; }
-    .transaction-meta { font-size: 0.8rem; color: #8892b0; }
-    .transaction-amount { font-weight: 800; color: #ff6b9d; }
-    .delete-btn { background: none; border: none; color: #666; cursor: pointer; font-size: 1.2rem; }
-    .delete-btn:hover { color: #ff6b9d; }
-    .chart-box {
-      background: linear-gradient(135deg, #16213e, #0f3460);
-      border: 1px solid rgba(255,255,255,0.1);
-      padding: 24px;
-      border-radius: 12px;
-      margin-bottom: 24px;
-    }
-    .chart-box h3 { font-size: 1.1rem; margin-bottom: 16px; color: #fff; }
+    .category-name { font-weight: 700; color: #2c3e50; }
+    .category-spent { font-weight: 800; color: #e74c3c; }
+    .progress-bar { width: 100%; background: #e5e7eb; height: 8px; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+    .progress-fill { height: 100%; background: #667eea; }
+    .category-item.over .progress-fill { background: #e74c3c; }
+    .category-info { display: flex; justify-content: space-between; font-size: 0.85rem; color: #8fa3b8; }
+
+    /* Transactions */
+    .transaction-item { padding: 12px 16px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+    .transaction-item:hover { background: #f8f9fa; }
+    .transaction-info { flex: 1; }
+    .transaction-desc { font-weight: 600; color: #2c3e50; }
+    .transaction-meta { font-size: 0.8rem; color: #8fa3b8; margin-top: 4px; }
+    .transaction-amount { font-weight: 800; color: #667eea; font-size: 1.1rem; cursor: pointer; }
+    .transaction-amount:hover { color: #5568d3; }
+    .delete-btn { background: none; border: none; color: #ccc; cursor: pointer; font-size: 1.2rem; }
+    .delete-btn:hover { color: #e74c3c; }
+
+    /* Chart */
+    .chart-card { background: white; padding: 24px; border-radius: 12px; border: 1px solid #e5e7eb; margin-bottom: 24px; }
+    .chart-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
     .chart-wrapper { position: relative; height: 300px; }
+
     @media (max-width: 768px) {
-      .stats-row { grid-template-columns: 1fr; }
-      .month-header { font-size: 1.5rem; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+      nav { gap: 12px; }
+      nav button { padding: 12px 8px; font-size: 0.8rem; }
     }
   </style>
 </head>
@@ -105,13 +86,13 @@
 
 <header>
   <div class="logo">💰 Noel</div>
-  <button class="btn-primary" onclick="switchSection(null, 'dashboard')" style="padding: 8px 16px; font-size: 0.9rem;">Dashboard</button>
+  <button class="btn btn-primary" style="padding: 8px 16px; font-size: 0.9rem;" onclick="switchSection(null, 'daily-log')">Quick Add</button>
 </header>
 
 <nav>
   <button class="nav-btn active" onclick="switchSection(event, 'dashboard')">Dashboard</button>
   <button class="nav-btn" onclick="switchSection(event, 'daily-log')">Add Spending</button>
-  <button class="nav-btn" onclick="switchSection(event, 'insights')">Insights</button>
+  <button class="nav-btn" onclick="switchSection(event, 'budgets')">Budgets</button>
   <button class="nav-btn" onclick="switchSection(event, 'settings')">Settings</button>
 </nav>
 
@@ -119,48 +100,60 @@
 
   <!-- Dashboard -->
   <div id="dashboard" class="section active">
-    <div class="month-header" id="monthHeader">September</div>
+    <div class="week-header">
+      <h2>This week spend</h2>
+      <div class="week-dates" id="weekRange"></div>
+    </div>
 
-    <div class="stats-row">
-      <div class="stat-card income">
-        <div class="stat-label">Total Income</div>
-        <div class="stat-value" id="dashIncome">€0</div>
+    <div class="stats-grid">
+      <div class="stat-card primary">
+        <div class="stat-label">Weekly Target</div>
+        <div class="stat-value" id="weeklyTarget">€1,725</div>
       </div>
-      <div class="stat-card expense">
-        <div class="stat-label">Total Expenses</div>
-        <div class="stat-value" id="dashMonthSpending">€0</div>
+      <div class="stat-card danger">
+        <div class="stat-label">Spent This Week</div>
+        <div class="stat-value" id="weekSpent">€0</div>
       </div>
-      <div class="stat-card balance">
-        <div class="stat-label">Net Income</div>
-        <div class="stat-value" id="dashNetWorth">€0</div>
+      <div class="stat-card success">
+        <div class="stat-label">Income</div>
+        <div class="stat-value" id="incomeThisWeek">€0</div>
       </div>
     </div>
 
-    <div class="form-section">
-      <h3>📋 Category Spending vs Budget</h3>
+    <div class="form-card">
+      <h3>📋 Category Spending</h3>
       <div id="categoryBudgetDisplay"></div>
     </div>
 
-    <div class="chart-box">
+    <div class="chart-card">
       <h3>📊 Spending by Category</h3>
       <div class="chart-wrapper">
         <canvas id="categoryChart"></canvas>
       </div>
     </div>
 
-    <div class="form-section">
-      <h3>📝 Recent Spending</h3>
-      <div style="max-height: 400px; overflow-y: auto;">
-        <div id="filteredTransactionsList"></div>
+    <div class="chart-card">
+      <h3>📈 5-Week Trend</h3>
+      <div class="chart-wrapper">
+        <canvas id="trendChart"></canvas>
       </div>
+    </div>
+
+    <div class="form-card">
+      <h3>📝 Recent Transactions</h3>
+      <div id="filteredTransactionsList"></div>
     </div>
   </div>
 
-  <!-- Daily Log -->
+  <!-- Add Spending (Daily Log) -->
   <div id="daily-log" class="section">
-    <div class="form-section">
-      <h3>➕ Quick Add Spending</h3>
-      <div class="form-row">
+    <div class="form-card">
+      <h3>➕ Quick Add (5 seconds)</h3>
+      <div class="toggle-group">
+        <button class="toggle-btn active" id="toggleOut" onclick="setTransactionType('out')">💸 Money Out</button>
+        <button class="toggle-btn" id="toggleIn" onclick="setTransactionType('in')">💰 Money In</button>
+      </div>
+      <div class="form-grid">
         <div class="form-group">
           <label>Date</label>
           <input type="date" id="logDate">
@@ -169,6 +162,18 @@
           <label>Amount (€)</label>
           <input type="number" id="logAmount" placeholder="0.00" step="0.01">
         </div>
+        <div class="form-group">
+          <label>Account</label>
+          <select id="logAccount">
+            <option>AIB Personal</option>
+            <option>AIB Business</option>
+            <option>Revolut</option>
+            <option>Credit Union</option>
+            <option>Cash</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
         <div class="form-group">
           <label>Category</label>
           <select id="logCategory">
@@ -182,56 +187,43 @@
             <option>Personal & Discretionary</option>
           </select>
         </div>
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" id="logDesc" placeholder="e.g. Tesco Supermarket">
+        </div>
       </div>
-      <div class="form-group">
-        <label>Description</label>
-        <input type="text" id="logDesc" placeholder="e.g. Tesco Supermarket">
-      </div>
-      <button class="btn-primary" onclick="addDailyLog()" style="width: 100%; margin-top: 16px;">Log Spending</button>
+      <button class="btn btn-primary" onclick="addDailyLog()" style="width: 100%; margin-top: 16px;">Log Transaction</button>
     </div>
   </div>
 
-  <!-- Insights -->
-  <div id="insights" class="section">
-    <div class="form-section">
-      <h3>💡 Smart Insights</h3>
-      <div class="stats-row">
-        <div class="stat-card">
-          <div class="stat-label">Week Spending</div>
-          <div class="stat-value" id="insWeekSpending">€0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Month Spending</div>
-          <div class="stat-value" id="insMonthSpending">€0</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Balance</div>
-          <div class="stat-value" id="insBalance">€0</div>
-        </div>
+  <!-- Budgets -->
+  <div id="budgets" class="section">
+    <div class="form-card">
+      <h3>📋 Set Your Budget</h3>
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label>Weekly Budget Target (€)</label>
+        <input type="number" id="weeklyBudgetInput" placeholder="1725" step="0.01">
       </div>
+      <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Set monthly budget limit for each category</p>
+      <div id="categoryBudgetsForm"></div>
+      <button class="btn btn-primary" onclick="saveBudgets()" style="width: 100%; margin-top: 16px;">Save All Budgets</button>
     </div>
   </div>
 
   <!-- Settings -->
   <div id="settings" class="section">
-    <div class="form-section">
-      <h3>⚙️ Category Budgets</h3>
-      <p style="color: #8892b0; margin-bottom: 16px; font-size: 0.9rem;">Set a monthly budget limit for each category</p>
-      <div id="categoryBudgetsForm"></div>
-      <button class="btn-primary" onclick="saveCategoryBudgets()" style="width: 100%; margin-top: 16px;">Save All Budgets</button>
+    <div class="form-card">
+      <h3>🔗 Open Banking</h3>
+      <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Connect via Tink or TrueLayer (sandbox mode)</p>
+      <button class="btn btn-primary" id="connectTinkBtn" onclick="connectTink()" style="width: 100%; margin-bottom: 12px;">Connect via Tink</button>
+      <button class="btn btn-secondary" onclick="connectTrueLayer()" style="width: 100%; margin-bottom: 12px;">Connect via TrueLayer</button>
+      <div id="bankStatus" style="font-size: 0.9rem; color: #8fa3b8; margin-top: 12px;"></div>
     </div>
 
-    <div class="form-section">
-      <h3>🏦 Connect Your Bank</h3>
-      <p style="color: #8892b0; margin-bottom: 16px; font-size: 0.9rem;">Auto-sync transactions from AIB, Bank of Ireland, and more.</p>
-      <button class="btn-primary" id="connectBankBtn" onclick="openPlaidLink()" style="width: 100%; margin-bottom: 12px;">🔗 Connect Bank Account</button>
-      <div id="bankStatus" style="font-size: 0.9rem; color: #8892b0;"></div>
-    </div>
-
-    <div class="form-section">
-      <h3>⚙️ Data</h3>
-      <button class="btn-primary" onclick="loadSampleData()" style="width: 100%; margin-bottom: 12px;">Load Sample Data</button>
-      <button class="btn-primary" onclick="clearAllData()" style="width: 100%; background: #e74c3c;">Clear All Data</button>
+    <div class="form-card">
+      <h3>📊 Data</h3>
+      <button class="btn btn-primary" onclick="loadSampleData()" style="width: 100%; margin-bottom: 12px;">Load Sample Data</button>
+      <button class="btn btn-primary" style="background: #e74c3c; width: 100%;" onclick="clearAllData()">Clear All Data</button>
     </div>
   </div>
 
@@ -241,13 +233,17 @@
 let txns = JSON.parse(localStorage.getItem('txns') || '[]');
 let income = JSON.parse(localStorage.getItem('income') || '[]');
 let catBudgets = JSON.parse(localStorage.getItem('catBudgets') || '{}');
+let weeklyBudget = parseFloat(localStorage.getItem('weeklyBudget') || '1725');
+let transactionType = 'out';
 
 const categories = ['Groceries', 'Fuel & Transport', 'Utilities & Bills', 'Subscriptions', 'Eating Out & Coffee', 'Kids & Family', 'Health & Fitness', 'Personal & Discretionary'];
+const accounts = ['AIB Personal', 'AIB Business', 'Revolut', 'Credit Union', 'Cash'];
 
 function save() {
   localStorage.setItem('txns', JSON.stringify(txns));
   localStorage.setItem('income', JSON.stringify(income));
   localStorage.setItem('catBudgets', JSON.stringify(catBudgets));
+  localStorage.setItem('weeklyBudget', weeklyBudget);
 }
 
 function switchSection(event, sectionId) {
@@ -260,27 +256,29 @@ function switchSection(event, sectionId) {
   window.scrollTo(0, 0);
 }
 
+function setTransactionType(type) {
+  transactionType = type;
+  document.getElementById('toggleOut').classList.toggle('active', type === 'out');
+  document.getElementById('toggleIn').classList.toggle('active', type === 'in');
+}
+
 function addDailyLog() {
   const date = document.getElementById('logDate').value || new Date().toISOString().split('T')[0];
   const amount = parseFloat(document.getElementById('logAmount').value);
   const cat = document.getElementById('logCategory').value;
   const desc = document.getElementById('logDesc').value;
+  const account = document.getElementById('logAccount').value;
   if (!amount || amount <= 0) return alert('Enter a valid amount');
-  txns.push({ date, amount, category: cat, desc, id: Date.now() });
+
+  if (transactionType === 'in') {
+    income.push({ date, amount, desc, account, id: Date.now() });
+  } else {
+    txns.push({ date, amount, category: cat, desc, account, id: Date.now() });
+  }
   save();
   document.getElementById('logAmount').value = '';
   document.getElementById('logDesc').value = '';
-  alert('✅ Spending logged!');
-  render();
-}
-
-function saveCategoryBudgets() {
-  categories.forEach(cat => {
-    const input = document.getElementById(`budget-${cat}`);
-    if (input?.value) catBudgets[cat] = parseFloat(input.value);
-  });
-  save();
-  alert('✅ Category budgets saved!');
+  alert('✅ Transaction logged!');
   render();
 }
 
@@ -295,8 +293,6 @@ function editTxn(id) {
       save();
       render();
       alert('✅ Amount updated!');
-    } else {
-      alert('Enter a valid amount');
     }
   }
 }
@@ -309,17 +305,31 @@ function deleteTxn(id) {
   }
 }
 
+function saveBudgets() {
+  weeklyBudget = parseFloat(document.getElementById('weeklyBudgetInput').value) || 1725;
+  categories.forEach(cat => {
+    const input = document.getElementById(`budget-${cat}`);
+    if (input?.value) catBudgets[cat] = parseFloat(input.value);
+  });
+  save();
+  alert('✅ Budgets saved!');
+  render();
+}
+
 function loadSampleData() {
   txns = [
-    { id: 1, date: '2026-05-06', amount: 52.50, category: 'Groceries', desc: 'Tesco Supermarket' },
-    { id: 2, date: '2026-05-05', amount: 18.99, category: 'Fuel & Transport', desc: 'Taxi - Dublin' },
-    { id: 3, date: '2026-05-05', amount: 89.50, category: 'Personal & Discretionary', desc: 'Zara Online' },
-    { id: 4, date: '2026-05-04', amount: 5.50, category: 'Eating Out & Coffee', desc: 'Starbucks Coffee' },
-    { id: 5, date: '2026-05-03', amount: 120.00, category: 'Eating Out & Coffee', desc: 'Restaurant - Temple Bar' },
-    { id: 6, date: '2026-05-02', amount: 35.00, category: 'Groceries', desc: 'Dunnes Stores' },
+    { id: 1, date: '2026-05-06', amount: 52.50, category: 'Groceries', desc: 'Tesco Supermarket', account: 'AIB Personal' },
+    { id: 2, date: '2026-05-05', amount: 18.99, category: 'Fuel & Transport', desc: 'Taxi - Dublin', account: 'Cash' },
+    { id: 3, date: '2026-05-05', amount: 89.50, category: 'Personal & Discretionary', desc: 'Zara Online', account: 'AIB Personal' },
+    { id: 4, date: '2026-05-04', amount: 5.50, category: 'Eating Out & Coffee', desc: 'Starbucks', account: 'AIB Personal' },
+    { id: 5, date: '2026-05-03', amount: 35.00, category: 'Groceries', desc: 'Dunnes Stores', account: 'AIB Personal' },
+    { id: 6, date: '2026-05-02', amount: 120.00, category: 'Eating Out & Coffee', desc: 'Restaurant', account: 'Revolut' },
   ];
-  income = [{ id: 1, date: '2026-05-01', amount: 3000, desc: 'Salary' }];
+  income = [
+    { id: 1, date: '2026-05-01', amount: 3000, desc: 'Salary', account: 'AIB Personal' },
+  ];
   catBudgets = { 'Groceries': 180, 'Fuel & Transport': 80, 'Utilities & Bills': 95, 'Subscriptions': 25, 'Eating Out & Coffee': 60, 'Kids & Family': 70, 'Health & Fitness': 25, 'Personal & Discretionary': 40 };
+  weeklyBudget = 1725;
   save();
   render();
   alert('✅ Demo data loaded!');
@@ -327,26 +337,27 @@ function loadSampleData() {
 
 function clearAllData() {
   if (confirm('Delete all data?')) {
-    txns = []; income = []; catBudgets = {};
+    txns = []; income = []; catBudgets = {}; weeklyBudget = 1725;
     save();
     render();
     alert('✅ Data cleared');
   }
 }
 
-function openPlaidLink() {
-  alert('🏦 Demo Mode\n\nClick OK to simulate connecting to a test Irish bank account.\n\nIn production, this would connect to your real AIB or Bank of Ireland account.');
-  simulateTestData();
+function connectTink() {
+  alert('🏦 Tink Integration (Sandbox)\n\nClick OK to simulate connecting to Tink.');
+  simulateBankSync();
 }
 
-function simulateTestData() {
+function connectTrueLayer() {
+  alert('🏦 TrueLayer Integration (Sandbox)\n\nClick OK to simulate connecting to TrueLayer.');
+  simulateBankSync();
+}
+
+function simulateBankSync() {
   const testTransactions = [
-    { date: '2026-05-06', amount: 52.50, category: 'Groceries', desc: 'Tesco Supermarket' },
-    { date: '2026-05-05', amount: 18.99, category: 'Fuel & Transport', desc: 'Taxi - Dublin' },
-    { date: '2026-05-05', amount: 89.50, category: 'Personal & Discretionary', desc: 'Zara Online' },
-    { date: '2026-05-04', amount: 5.50, category: 'Eating Out & Coffee', desc: 'Starbucks Coffee' },
-    { date: '2026-05-03', amount: 120.00, category: 'Eating Out & Coffee', desc: 'Cinema Tickets' },
-    { date: '2026-05-02', amount: 35.00, category: 'Groceries', desc: 'Restaurant - Temple Bar' },
+    { date: '2026-05-06', amount: 52.50, category: 'Groceries', desc: 'Tesco', account: 'AIB Personal' },
+    { date: '2026-05-05', amount: 18.99, category: 'Fuel & Transport', desc: 'Taxi', account: 'Cash' },
   ];
   let imported = 0;
   testTransactions.forEach(t => {
@@ -357,36 +368,43 @@ function simulateTestData() {
   });
   save();
   render();
-  document.getElementById('bankStatus').innerHTML = `✅ <strong>Bank Connected!</strong> Synced ${imported} transactions.`;
-  document.getElementById('connectBankBtn').textContent = '✅ Connected (Test)';
-  document.getElementById('connectBankBtn').disabled = true;
+  document.getElementById('bankStatus').innerHTML = `✅ Connected! Synced ${imported} transactions from Tink/TrueLayer.`;
+  document.getElementById('connectTinkBtn').textContent = '✅ Connected';
+  document.getElementById('connectTinkBtn').disabled = true;
 }
 
 function sumByCategory(cat) {
   return txns.filter(t => t.category === cat).reduce((sum, t) => sum + t.amount, 0);
 }
 
-function sumByDate(arr, field = 'amount', startDate = null, endDate = null) {
-  return arr.filter(item => {
-    if (!startDate || !endDate) return true;
-    return item.date >= startDate && item.date <= endDate;
-  }).reduce((sum, item) => sum + (item[field] || 0), 0);
+function sumByDateRange(arr, field = 'amount', startDate, endDate) {
+  return arr.filter(item => item.date >= startDate && item.date <= endDate).reduce((sum, item) => sum + (item[field] || 0), 0);
+}
+
+function getWeekRange() {
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const start = new Date(today);
+  start.setDate(today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] };
 }
 
 function filterTransactions() {
   let filtered = txns.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 20);
   const html = filtered.length ? filtered.map(t => `
     <div class="transaction-item">
-      <div>
+      <div class="transaction-info">
         <div class="transaction-desc">${t.desc}</div>
-        <div class="transaction-meta">${t.category} • ${t.date}</div>
+        <div class="transaction-meta">${t.category} • ${t.account} • ${t.date}</div>
       </div>
       <div style="display: flex; align-items: center; gap: 8px;">
-        <div class="transaction-amount" style="cursor: pointer;" onclick="editTxn(${t.id})" title="Click to edit">€${t.amount.toFixed(2)}</div>
-        <button class="delete-btn" onclick="deleteTxn(${t.id})" title="Delete">×</button>
+        <div class="transaction-amount" onclick="editTxn(${t.id})">€${t.amount.toFixed(2)}</div>
+        <button class="delete-btn" onclick="deleteTxn(${t.id})">×</button>
       </div>
     </div>
-  `).join('') : '<div style="text-align: center; color: #8892b0; padding: 20px;">No transactions yet</div>';
+  `).join('') : '<div style="text-align: center; color: #8fa3b8; padding: 20px;">No transactions yet</div>';
   document.getElementById('filteredTransactionsList').innerHTML = html;
 }
 
@@ -394,56 +412,83 @@ function renderCharts() {
   const categorySpending = {};
   categories.forEach(cat => categorySpending[cat] = sumByCategory(cat));
 
-  const categoryCanvas = document.getElementById('categoryChart');
-  if (categoryCanvas) {
-    const ctx = categoryCanvas.getContext('2d');
-    if (window.categoryChart) window.categoryChart.destroy();
-    window.categoryChart = new Chart(ctx, {
+  const canvas = document.getElementById('categoryChart');
+  if (canvas && window.categoryChart) window.categoryChart.destroy();
+  if (canvas) {
+    window.categoryChart = new Chart(canvas, {
       type: 'doughnut',
       data: {
         labels: categories,
         datasets: [{
           data: Object.values(categorySpending),
-          backgroundColor: ['#00d4aa', '#ff6b9d', '#ffd700', '#4caf50', '#0099ff', '#9c27b0', '#ff6b6b', '#45a2ff'],
-          borderColor: '#1a1a2e',
-          borderWidth: 3
+          backgroundColor: ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe', '#43e97b', '#fa709a', '#fee140'],
+          borderColor: 'white',
+          borderWidth: 2
         }]
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', labels: { color: '#e0e0e0', padding: 12 } } }
-      }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+    });
+  }
+
+  // 5-week trend
+  const trendCanvas = document.getElementById('trendChart');
+  if (trendCanvas && window.trendChart) window.trendChart.destroy();
+  if (trendCanvas) {
+    const labels = [];
+    const data = [];
+    for (let i = 4; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - (7 * i));
+      const weekStart = new Date(d);
+      weekStart.setDate(d.getDate() - d.getDay() + 1);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      const sStart = weekStart.toISOString().split('T')[0];
+      const sEnd = weekEnd.toISOString().split('T')[0];
+      labels.push('Week ' + (5 - i));
+      data.push(sumByDateRange(txns, 'amount', sStart, sEnd));
+    }
+    window.trendChart = new Chart(trendCanvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Weekly Spending',
+          data,
+          borderColor: '#667eea',
+          backgroundColor: 'rgba(102, 126, 234, 0.1)',
+          tension: 0.4,
+          fill: true,
+          pointRadius: 5,
+          pointBackgroundColor: '#667eea'
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { padding: 16 } } }, scales: { y: { beginAtZero: true } } }
     });
   }
 }
 
 function render() {
-  const today = new Date().toISOString().split('T')[0];
-  const monthName = new Date().toLocaleString('en-US', { month: 'long' });
-  document.getElementById('monthHeader').textContent = monthName;
+  const { start, end } = getWeekRange();
+  document.getElementById('weekRange').textContent = `${start} — ${end}`;
 
-  const totalIncome = sumByDate(income, 'amount');
-  const totalExpenses = sumByDate(txns, 'amount');
-  const balance = totalIncome - totalExpenses;
+  const weekSpent = sumByDateRange(txns, 'amount', start, end);
+  const weekIncome = sumByDateRange(income, 'amount', start, end);
 
-  document.getElementById('dashIncome').textContent = `€${totalIncome.toFixed(2)}`;
-  document.getElementById('dashMonthSpending').textContent = `€${totalExpenses.toFixed(2)}`;
-  document.getElementById('dashNetWorth').textContent = `€${balance.toFixed(2)}`;
-
-  document.getElementById('insWeekSpending').textContent = `€${sumByDate(txns, 'amount', new Date(new Date().getTime() - 7*24*60*60*1000).toISOString().split('T')[0], today).toFixed(2)}`;
-  document.getElementById('insMonthSpending').textContent = `€${totalExpenses.toFixed(2)}`;
-  document.getElementById('insBalance').textContent = `€${balance.toFixed(2)}`;
+  document.getElementById('weeklyTarget').textContent = `€${weeklyBudget.toFixed(0)}`;
+  document.getElementById('weekSpent').textContent = `€${weekSpent.toFixed(2)}`;
+  document.getElementById('incomeThisWeek').textContent = `€${weekIncome.toFixed(2)}`;
 
   // Category budgets form
-  let budgetForm = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">';
+  let budgetForm = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">';
   categories.forEach(cat => {
     budgetForm += `<div class="form-group"><label>${cat}</label><input type="number" id="budget-${cat}" value="${catBudgets[cat] || ''}" placeholder="€0.00" step="0.01"></div>`;
   });
   budgetForm += '</div>';
   document.getElementById('categoryBudgetsForm').innerHTML = budgetForm;
+  document.getElementById('weeklyBudgetInput').value = weeklyBudget;
 
-  // Category spending vs budget
+  // Category budget display
   let budgetDisplay = '';
   categories.forEach(cat => {
     const spent = sumByCategory(cat);
@@ -453,28 +498,26 @@ function render() {
 
     if (budget > 0) {
       budgetDisplay += `
-        <div class="category-budget-card ${isOver ? 'over' : ''}">
+        <div class="category-item ${isOver ? 'over' : ''}">
           <div class="category-header">
             <span class="category-name">${cat}</span>
             <span class="category-spent">€${spent.toFixed(2)}</span>
           </div>
           <div class="progress-bar">
-            <div class="progress-fill" style="width: ${Math.min(percentUsed, 100)}%; background: ${isOver ? '#ff6b9d' : '#00d4aa'};"></div>
+            <div class="progress-fill" style="width: ${Math.min(percentUsed, 100)}%;"></div>
           </div>
           <div class="category-info">
             <span>${percentUsed.toFixed(0)}% of €${budget.toFixed(2)}</span>
-            <span style="color: ${isOver ? '#ff6b9d' : '#4caf50'};">
-              ${isOver ? `⚠️ €${(spent - budget).toFixed(2)} over` : `✅ €${(budget - spent).toFixed(2)} left`}
-            </span>
+            <span>${isOver ? `⚠️ €${(spent - budget).toFixed(2)} over` : `✅ €${(budget - spent).toFixed(2)} left`}</span>
           </div>
         </div>
       `;
     }
   });
-  if (!budgetDisplay) budgetDisplay = '<p style="color: #8892b0; text-align: center; padding: 20px;">Set category budgets in Settings to track spending</p>';
+  if (!budgetDisplay) budgetDisplay = '<p style="color: #8fa3b8; text-align: center; padding: 20px;">Set budgets to track spending</p>';
   document.getElementById('categoryBudgetDisplay').innerHTML = budgetDisplay;
 
-  document.getElementById('logDate').value = today;
+  document.getElementById('logDate').value = new Date().toISOString().split('T')[0];
   filterTransactions();
   renderCharts();
 }
