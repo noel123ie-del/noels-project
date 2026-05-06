@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spending Manager</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      padding: 20px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    }
+
+    header h1 { font-size: 1.6rem; font-weight: 700; }
+    header span { font-size: 0.9rem; opacity: 0.85; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+
+    /* Summary cards */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      border-left: 5px solid #667eea;
+    }
+
+    .card.danger { border-left-color: #e74c3c; }
+    .card.success { border-left-color: #2ecc71; }
+    .card.warning { border-left-color: #f39c12; }
+
+    .card label { font-size: 0.78rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+    .card .amount { font-size: 1.9rem; font-weight: 700; margin-top: 4px; }
+
+    /* Layout */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Form panel */
+    .panel {
+      background: white;
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+
+    .panel h2 { font-size: 1.1rem; margin-bottom: 18px; color: #444; }
+
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 0.83rem; color: #666; margin-bottom: 5px; font-weight: 600; }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .form-group textarea { resize: vertical; min-height: 60px; }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .btn:hover { opacity: 0.9; }
+
+    /* Filter bar */
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-bar select, .filter-bar input {
+      padding: 8px 12px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+
+    .filter-bar input { flex: 1; min-width: 150px; }
+
+    .btn-sm {
+      padding: 8px 14px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .btn-sm.danger { background: #e74c3c; }
+
+    /* Expense list */
+    .expense-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .expense-item {
+      background: white;
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      transition: transform 0.15s;
+    }
+
+    .expense-item:hover { transform: translateY(-1px); }
+
+    .category-dot {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+
+    .expense-info { flex: 1; min-width: 0; }
+    .expense-info .title { font-weight: 600; font-size: 0.95rem; }
+    .expense-info .meta { font-size: 0.78rem; color: #999; margin-top: 2px; }
+
+    .expense-amount {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #e74c3c;
+      flex-shrink: 0;
+    }
+
+    .delete-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #ccc;
+      font-size: 1.1rem;
+      padding: 4px;
+      transition: color 0.2s;
+    }
+
+    .delete-btn:hover { color: #e74c3c; }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #bbb;
+      font-size: 0.95rem;
+    }
+
+    .empty-state .icon { font-size: 3rem; margin-bottom: 10px; }
+
+    /* Budget bar */
+    .budget-bar-wrap { margin-top: 10px; }
+    .budget-bar-track { background: #eee; border-radius: 99px; height: 8px; overflow: hidden; margin-top: 6px; }
+    .budget-bar-fill { height: 100%; border-radius: 99px; background: #2ecc71; transition: width 0.4s; }
+    .budget-bar-fill.warn { background: #f39c12; }
+    .budget-bar-fill.over { background: #e74c3c; }
+    .budget-bar-label { display: flex; justify-content: space-between; font-size: 0.78rem; color: #888; margin-top: 4px; }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #333;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>💸 Spending Manager</h1>
+  <span id="header-date"></span>
+</header>
+
+<div class="container">
+  <!-- Summary cards -->
+  <div class="cards">
+    <div class="card warning">
+      <label>This Month</label>
+      <div class="amount" id="total-month">€0.00</div>
+    </div>
+    <div class="card danger">
+      <label>This Week</label>
+      <div class="amount" id="total-week">€0.00</div>
+    </div>
+    <div class="card">
+      <label>Total Expenses</label>
+      <div class="amount" id="total-all">€0.00</div>
+    </div>
+    <div class="card success">
+      <label>Transactions</label>
+      <div class="amount" id="total-count">0</div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <!-- Add expense form -->
+    <div>
+      <div class="panel">
+        <h2>Add Expense</h2>
+        <form id="expense-form">
+          <div class="form-group">
+            <label>Amount (€)</label>
+            <input type="number" id="amount" placeholder="0.00" min="0.01" step="0.01" required />
+          </div>
+          <div class="form-group">
+            <label>Category</label>
+            <select id="category">
+              <option value="Food">🍔 Food</option>
+              <option value="Transport">🚗 Transport</option>
+              <option value="Shopping">🛍️ Shopping</option>
+              <option value="Entertainment">🎬 Entertainment</option>
+              <option value="Health">💊 Health</option>
+              <option value="Bills">🧾 Bills</option>
+              <option value="Education">📚 Education</option>
+              <option value="Other">📦 Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <input type="text" id="description" placeholder="e.g. Lunch at cafe" required />
+          </div>
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" id="date" required />
+          </div>
+          <div class="form-group">
+            <label>Notes (optional)</label>
+            <textarea id="notes" placeholder="Any extra details..."></textarea>
+          </div>
+          <button type="submit" class="btn">Add Expense</button>
+        </form>
+      </div>
+
+      <!-- Budget panel -->
+      <div class="panel" style="margin-top:16px;">
+        <h2>Monthly Budget</h2>
+        <div class="form-group">
+          <label>Set Budget (€)</label>
+          <input type="number" id="budget-input" placeholder="e.g. 1500" min="0" step="1" />
+        </div>
+        <button class="btn" onclick="saveBudget()">Save Budget</button>
+        <div class="budget-bar-wrap" id="budget-section" style="display:none;">
+          <div class="budget-bar-track">
+            <div class="budget-bar-fill" id="budget-bar"></div>
+          </div>
+          <div class="budget-bar-label">
+            <span id="budget-spent-label"></span>
+            <span id="budget-limit-label"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Expense list -->
+    <div class="panel">
+      <h2>Expenses</h2>
+      <div class="filter-bar">
+        <input type="text" id="search" placeholder="Search..." oninput="renderList()" />
+        <select id="filter-category" onchange="renderList()">
+          <option value="">All Categories</option>
+          <option value="Food">Food</option>
+          <option value="Transport">Transport</option>
+          <option value="Shopping">Shopping</option>
+          <option value="Entertainment">Entertainment</option>
+          <option value="Health">Health</option>
+          <option value="Bills">Bills</option>
+          <option value="Education">Education</option>
+          <option value="Other">Other</option>
+        </select>
+        <select id="filter-period" onchange="renderList()">
+          <option value="all">All Time</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+        </select>
+        <button class="btn-sm danger" onclick="clearAll()">Clear All</button>
+        <button class="btn-sm" onclick="exportCSV()" style="background:#2ecc71;">Export CSV</button>
+      </div>
+      <div class="expense-list" id="expense-list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  const CATEGORY_META = {
+    Food:          { icon: '🍔', bg: '#fff3e0', color: '#e65100' },
+    Transport:     { icon: '🚗', bg: '#e3f2fd', color: '#1565c0' },
+    Shopping:      { icon: '🛍️', bg: '#fce4ec', color: '#880e4f' },
+    Entertainment: { icon: '🎬', bg: '#f3e5f5', color: '#6a1b9a' },
+    Health:        { icon: '💊', bg: '#e8f5e9', color: '#2e7d32' },
+    Bills:         { icon: '🧾', bg: '#fafafa', color: '#424242' },
+    Education:     { icon: '📚', bg: '#e8eaf6', color: '#283593' },
+    Other:         { icon: '📦', bg: '#efebe9', color: '#4e342e' },
+  };
+
+  let expenses = JSON.parse(localStorage.getItem('sm_expenses') || '[]');
+  let budget   = parseFloat(localStorage.getItem('sm_budget') || '0');
+
+  // Init
+  document.getElementById('header-date').textContent = new Date().toLocaleDateString('en-IE', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  document.getElementById('date').valueAsDate = new Date();
+  if (budget) document.getElementById('budget-input').value = budget;
+
+  // Form submit
+  document.getElementById('expense-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const expense = {
+      id: Date.now(),
+      amount:      parseFloat(document.getElementById('amount').value),
+      category:    document.getElementById('category').value,
+      description: document.getElementById('description').value.trim(),
+      date:        document.getElementById('date').value,
+      notes:       document.getElementById('notes').value.trim(),
+    };
+    expenses.unshift(expense);
+    save();
+    renderAll();
+    e.target.reset();
+    document.getElementById('date').valueAsDate = new Date();
+    showToast('Expense added!');
+  });
+
+  function saveBudget() {
+    budget = parseFloat(document.getElementById('budget-input').value) || 0;
+    localStorage.setItem('sm_budget', budget);
+    renderBudget();
+    showToast('Budget saved!');
+  }
+
+  function deleteExpense(id) {
+    expenses = expenses.filter(e => e.id !== id);
+    save();
+    renderAll();
+    showToast('Expense deleted.');
+  }
+
+  function clearAll() {
+    if (!confirm('Delete ALL expenses? This cannot be undone.')) return;
+    expenses = [];
+    save();
+    renderAll();
+    showToast('All expenses cleared.');
+  }
+
+  function save() {
+    localStorage.setItem('sm_expenses', JSON.stringify(expenses));
+  }
+
+  function renderAll() {
+    renderList();
+    renderSummary();
+    renderBudget();
+  }
+
+  function exportCSV() {
+    if (!expenses.length) {
+      showToast('No expenses to export.');
+      return;
+    }
+    const headers = ['Date', 'Category', 'Description', 'Amount', 'Notes'];
+    const rows = expenses.map(e => [
+      e.date,
+      e.category,
+      '"' + e.description.replace(/"/g, '""') + '"',
+      e.amount.toFixed(2),
+      '"' + e.notes.replace(/"/g, '""') + '"'
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'spending-' + new Date().toISOString().split('T')[0] + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV exported!');
+  }
+
+  function filtered() {
+    const search   = document.getElementById('search').value.toLowerCase();
+    const cat      = document.getElementById('filter-category').value;
+    const period   = document.getElementById('filter-period').value;
+    const now      = new Date();
+
+    return expenses.filter(e => {
+      if (cat && e.category !== cat) return false;
+      if (search && !e.description.toLowerCase().includes(search) && !e.category.toLowerCase().includes(search)) return false;
+      if (period !== 'all') {
+        const d = new Date(e.date + 'T00:00:00');
+        if (period === 'month' && (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear())) return false;
+        if (period === 'week') {
+          const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay());
+          startOfWeek.setHours(0,0,0,0);
+          if (d < startOfWeek) return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  function renderList() {
+    const list = document.getElementById('expense-list');
+    const data = filtered();
+    if (!data.length) {
+      list.innerHTML = '<div class="empty-state"><div class="icon">📭</div>No expenses found.</div>';
+      return;
+    }
+    list.innerHTML = data.map(e => {
+      const meta = CATEGORY_META[e.category] || CATEGORY_META.Other;
+      const dateStr = new Date(e.date + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+      return `
+        <div class="expense-item">
+          <div class="category-dot" style="background:${meta.bg}; color:${meta.color}">${meta.icon}</div>
+          <div class="expense-info">
+            <div class="title">${escHtml(e.description)}</div>
+            <div class="meta">${e.category} &bull; ${dateStr}${e.notes ? ' &bull; ' + escHtml(e.notes) : ''}</div>
+          </div>
+          <div class="expense-amount">-€${e.amount.toFixed(2)}</div>
+          <button class="delete-btn" onclick="deleteExpense(${e.id})" title="Delete">✕</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderSummary() {
+    const now = new Date();
+    const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay()); startOfWeek.setHours(0,0,0,0);
+
+    let totalAll = 0, totalMonth = 0, totalWeek = 0;
+    expenses.forEach(e => {
+      const d = new Date(e.date + 'T00:00:00');
+      totalAll += e.amount;
+      if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) totalMonth += e.amount;
+      if (d >= startOfWeek) totalWeek += e.amount;
+    });
+
+    document.getElementById('total-all').textContent   = '€' + totalAll.toFixed(2);
+    document.getElementById('total-month').textContent = '€' + totalMonth.toFixed(2);
+    document.getElementById('total-week').textContent  = '€' + totalWeek.toFixed(2);
+    document.getElementById('total-count').textContent = expenses.length;
+  }
+
+  function renderBudget() {
+    const section = document.getElementById('budget-section');
+    if (!budget) { section.style.display = 'none'; return; }
+
+    const now = new Date();
+    const monthTotal = expenses
+      .filter(e => { const d = new Date(e.date + 'T00:00:00'); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); })
+      .reduce((s, e) => s + e.amount, 0);
+
+    const pct = Math.min((monthTotal / budget) * 100, 100);
+    const bar = document.getElementById('budget-bar');
+    bar.style.width = pct + '%';
+    bar.className = 'budget-bar-fill' + (pct >= 100 ? ' over' : pct >= 75 ? ' warn' : '');
+
+    document.getElementById('budget-spent-label').textContent = `Spent: €${monthTotal.toFixed(2)}`;
+    document.getElementById('budget-limit-label').textContent = `Budget: €${budget.toFixed(2)}`;
+    section.style.display = 'block';
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  renderAll();
+</script>
+</body>
+</html>
