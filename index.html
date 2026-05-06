@@ -228,6 +228,24 @@
     }
 
     #toast.show { opacity: 1; }
+
+    /* Charts */
+    .chart-container { margin-top: 20px; }
+    .category-breakdown { display: flex; flex-direction: column; gap: 12px; }
+    .breakdown-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .breakdown-item:last-child { border-bottom: none; }
+    .breakdown-label { flex: 1; }
+    .breakdown-label .cat-name { font-weight: 600; font-size: 0.95rem; }
+    .breakdown-label .cat-pct { font-size: 0.8rem; color: #999; margin-top: 2px; }
+    .breakdown-bar { flex: 0 0 100px; height: 6px; background: #eee; border-radius: 99px; overflow: hidden; }
+    .breakdown-bar-fill { height: 100%; background: #667eea; border-radius: 99px; }
+    .breakdown-amount { font-weight: 700; font-size: 0.95rem; min-width: 70px; text-align: right; }
   </style>
 </head>
 <body>
@@ -326,9 +344,16 @@
       </div>
     </div>
 
-    <!-- Expense list -->
-    <div class="panel">
-      <h2>Expenses</h2>
+    <!-- Analytics -->
+    <div>
+      <div class="panel">
+        <h2>Spending Breakdown</h2>
+        <div id="chart-container" class="chart-container"></div>
+      </div>
+
+      <!-- Expense list -->
+      <div class="panel" style="margin-top:16px;">
+        <h2>Expenses</h2>
       <div class="filter-bar">
         <input type="text" id="search" placeholder="Search..." oninput="renderList()" />
         <select id="filter-category" onchange="renderList()">
@@ -351,6 +376,7 @@
         <button class="btn-sm" onclick="exportCSV()" style="background:#2ecc71;">Export CSV</button>
       </div>
       <div class="expense-list" id="expense-list"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -428,6 +454,52 @@
     renderList();
     renderSummary();
     renderBudget();
+    renderChart();
+  }
+
+  function renderChart() {
+    const now = new Date();
+    const categoryTotals = {};
+    let total = 0;
+
+    expenses.forEach(e => {
+      const d = new Date(e.date + 'T00:00:00');
+      if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+        categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
+        total += e.amount;
+      }
+    });
+
+    const container = document.getElementById('chart-container');
+    if (total === 0) {
+      container.innerHTML = '<div class="empty-state" style="padding:20px;"><div style="font-size:2rem;">📊</div>No spending this month yet.</div>';
+      return;
+    }
+
+    const sorted = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+    const colors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe', '#43e97b', '#fa709a', '#fee140'];
+
+    container.innerHTML = '<div class="category-breakdown">' + sorted.map(([ cat, amt ], idx) => {
+      const pct = ((amt / total) * 100).toFixed(0);
+      const meta = CATEGORY_META[cat] || CATEGORY_META.Other;
+      return `
+        <div class="breakdown-item">
+          <div class="breakdown-label">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:1.2rem;">${meta.icon}</span>
+              <div>
+                <div class="cat-name">${cat}</div>
+                <div class="cat-pct">${pct}% of total</div>
+              </div>
+            </div>
+          </div>
+          <div class="breakdown-bar">
+            <div class="breakdown-bar-fill" style="width:100%;background:${colors[idx % colors.length]};"></div>
+          </div>
+          <div class="breakdown-amount" style="color:${colors[idx % colors.length]};">€${amt.toFixed(2)}</div>
+        </div>
+      `;
+    }).join('') + '</div>';
   }
 
   function exportCSV() {
