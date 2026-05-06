@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Noeld - Smart Spending Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #1f2937;
+      background: #fff;
+    }
+
+    header {
+      background: white;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 { font-size: 1.4rem; font-weight: 700; color: #667eea; }
+    header a { color: #667eea; text-decoration: none; font-weight: 600; }
+
+    .hero {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 80px 24px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: 3rem;
+      font-weight: 800;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: 1.2rem;
+      color: #6b7280;
+      margin-bottom: 32px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      margin-bottom: 80px;
+    }
+
+    .btn {
+      padding: 14px 32px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover { background: #5a67d8; }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #1f2937;
+    }
+
+    .btn-secondary:hover { background: #d1d5db; }
+
+    .features {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 80px 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 32px;
+    }
+
+    .feature {
+      text-align: center;
+    }
+
+    .feature .icon { font-size: 3rem; margin-bottom: 16px; }
+    .feature h3 { font-size: 1.2rem; margin-bottom: 12px; font-weight: 700; }
+    .feature p { color: #6b7280; line-height: 1.6; }
+
+    .pricing {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 80px 24px;
+      background: #f9fafb;
+    }
+
+    .pricing h2 {
+      text-align: center;
+      font-size: 2.2rem;
+      margin-bottom: 60px;
+      font-weight: 800;
+    }
+
+    .pricing-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+
+    .pricing-card {
+      background: white;
+      border-radius: 12px;
+      padding: 32px;
+      border: 2px solid #e5e7eb;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .pricing-card:hover { border-color: #667eea; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.15); }
+    .pricing-card.featured { border-color: #667eea; }
+
+    .pricing-card h3 { font-size: 1.3rem; margin-bottom: 8px; }
+    .pricing-card .price { font-size: 2.5rem; font-weight: 800; color: #667eea; margin: 16px 0; }
+    .pricing-card .price small { font-size: 1rem; color: #6b7280; }
+    .pricing-card p { color: #6b7280; margin-bottom: 24px; font-size: 0.95rem; }
+
+    .features-list {
+      text-align: left;
+      margin-bottom: 24px;
+      font-size: 0.9rem;
+    }
+
+    .features-list li { margin-bottom: 12px; }
+    .features-list li:before { content: "✓ "; color: #667eea; font-weight: 700; }
+
+    .pricing-card .btn { width: 100%; }
+
+    footer {
+      background: #1f2937;
+      color: white;
+      text-align: center;
+      padding: 40px 24px;
+      font-size: 0.9rem;
+    }
+
+    footer a { color: #667eea; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>💰 Noeld</h1>
+  <a href="index.html">Launch App</a>
+</header>
+
+<div class="hero">
+  <h1>Take Control of Your Money</h1>
+  <p>Simple, smart spending tracker. Connect your bank, understand your habits, take control.</p>
+  <div class="cta-buttons">
+    <a href="index.html" class="btn btn-primary">Start Free Trial</a>
+    <a href="#pricing" class="btn btn-secondary">See Pricing</a>
+  </div>
+</div>
+
+<div class="features">
+  <div class="feature">
+    <div class="icon">📥</div>
+    <h3>Instant Import</h3>
+    <p>Drag & drop your bank CSV. Auto-categorized in seconds. No manual data entry.</p>
+  </div>
+
+  <div class="feature">
+    <div class="icon">🔍</div>
+    <h3>Smart Insights</h3>
+    <p>See exactly where your money goes. Spending breakdown by category, trends, patterns.</p>
+  </div>
+
+  <div class="feature">
+    <div class="icon">🎯</div>
+    <h3>Budget Control</h3>
+    <p>Set spending limits. Track progress. Get alerts when you're overspending.</p>
+  </div>
+
+  <div class="feature">
+    <div class="icon">🔄</div>
+    <h3>Recurring Detection</h3>
+    <p>Automatically finds subscriptions. Spot forgotten charges. Save money instantly.</p>
+  </div>
+
+  <div class="feature">
+    <div class="icon">📊</div>
+    <h3>Visual Breakdown</h3>
+    <p>Beautiful charts show spending by category. Understand your money at a glance.</p>
+  </div>
+
+  <div class="feature">
+    <div class="icon">⚡</div>
+    <h3>Lightning Fast</h3>
+    <p>No bloat. No ads. No nonsense. Just you and your money.</p>
+  </div>
+</div>
+
+<div class="pricing" id="pricing">
+  <h2>Simple Pricing</h2>
+  <div class="pricing-cards">
+    <div class="pricing-card">
+      <h3>Basic</h3>
+      <div class="price">Free<small>/month</small></div>
+      <p>Get started with the essentials</p>
+      <ul class="features-list">
+        <li>CSV import</li>
+        <li>Auto-categorization</li>
+        <li>Monthly budget</li>
+        <li>Spending breakdown</li>
+        <li>Up to 12 months history</li>
+      </ul>
+      <a href="index.html" class="btn btn-secondary">Start Free</a>
+    </div>
+
+    <div class="pricing-card featured">
+      <h3>Pro</h3>
+      <div class="price">€9.99<small>/month</small></div>
+      <p>Everything you need</p>
+      <ul class="features-list">
+        <li>Everything in Basic</li>
+        <li>Unlimited history</li>
+        <li>Recurring detection</li>
+        <li>Advanced reports</li>
+        <li>Export to PDF</li>
+        <li>Priority support</li>
+      </ul>
+      <a href="index.html" class="btn btn-primary">Start 7-Day Trial</a>
+    </div>
+
+    <div class="pricing-card">
+      <h3>Family</h3>
+      <div class="price">€14.99<small>/month</small></div>
+      <p>Up to 4 family members</p>
+      <ul class="features-list">
+        <li>Everything in Pro</li>
+        <li>4 accounts included</li>
+        <li>Shared budgets</li>
+        <li>Family insights</li>
+        <li>Unlimited support</li>
+      </ul>
+      <a href="index.html" class="btn btn-secondary">Start 7-Day Trial</a>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p>&copy; 2026 Noeld. All rights reserved.</p>
+  <p><a href="#">Terms of Service</a> • <a href="#">Privacy Policy</a> • <a href="#">Contact</a></p>
+</footer>
+
+</body>
+</html>
