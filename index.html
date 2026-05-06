@@ -299,9 +299,9 @@
 
       <!-- Budget panel -->
       <div class="panel" style="margin-top:16px;">
-        <h2>Monthly Budget</h2>
+        <h2>Budget</h2>
         <div class="form-group">
-          <label>Set Budget (€)</label>
+          <label>Monthly Budget (€)</label>
           <input type="number" id="budget-input" placeholder="e.g. 1500" min="0" step="1" />
         </div>
         <button class="btn" onclick="saveBudget()">Save Budget</button>
@@ -314,6 +314,15 @@
             <span id="budget-limit-label"></span>
           </div>
         </div>
+
+        <h3 style="margin-top:20px; margin-bottom:14px; font-size:1rem; color:#444;">Budget by Category</h3>
+        <div id="category-budgets"></div>
+
+        <h3 style="margin-top:20px; margin-bottom:14px; font-size:1rem; color:#444;">Import CSV</h3>
+        <div class="form-group">
+          <input type="file" id="csv-upload" accept=".csv" />
+        </div>
+        <button class="btn" onclick="importCSV()" style="margin-top:10px;">Import Bank CSV</button>
       </div>
     </div>
 
@@ -362,11 +371,13 @@
 
   let expenses = JSON.parse(localStorage.getItem('sm_expenses') || '[]');
   let budget   = parseFloat(localStorage.getItem('sm_budget') || '0');
+  let categoryBudgets = JSON.parse(localStorage.getItem('sm_category_budgets') || '{}');
 
   // Init
   document.getElementById('header-date').textContent = new Date().toLocaleDateString('en-IE', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   document.getElementById('date').valueAsDate = new Date();
   if (budget) document.getElementById('budget-input').value = budget;
+  renderCategoryBudgets();
 
   // Form submit
   document.getElementById('expense-form').addEventListener('submit', e => {
@@ -535,6 +546,92 @@
     t.textContent = msg;
     t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  function renderCategoryBudgets() {
+    const container = document.getElementById('category-budgets');
+    const cats = ['Food', 'Transport', 'Shopping', 'Entertainment', 'Health', 'Bills', 'Education', 'Other'];
+    container.innerHTML = cats.map(cat => {
+      const val = categoryBudgets[cat] || '';
+      return `
+        <div class="form-group" style="margin-bottom:10px;">
+          <label style="margin-bottom:3px;">${cat}</label>
+          <input type="number" placeholder="€0" min="0" value="${val}" onchange="saveCategoryBudget('${cat}', this.value)" />
+        </div>
+      `;
+    }).join('');
+  }
+
+  function saveCategoryBudget(cat, val) {
+    categoryBudgets[cat] = val ? parseFloat(val) : 0;
+    localStorage.setItem('sm_category_budgets', JSON.stringify(categoryBudgets));
+    renderBudget();
+    showToast(`${cat} budget saved!`);
+  }
+
+  function importCSV() {
+    const file = document.getElementById('csv-upload').files[0];
+    if (!file) { showToast('Please select a CSV file.'); return; }
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      const csv = e.target.result;
+      const lines = csv.split('\n').filter(l => l.trim());
+      if (lines.length < 2) { showToast('CSV is empty.'); return; }
+
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const dateIdx = headers.findIndex(h => h.includes('date'));
+      const amountIdx = headers.findIndex(h => h.includes('amount') || h.includes('debit'));
+      const descIdx = headers.findIndex(h => h.includes('desc') || h.includes('merchant') || h.includes('reference'));
+
+      if (dateIdx === -1 || amountIdx === -1) {
+        showToast('CSV must have Date and Amount columns.');
+        return;
+      }
+
+      let added = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split(',').map(p => p.trim());
+        if (parts.length <= Math.max(dateIdx, amountIdx)) continue;
+
+        const dateStr = parts[dateIdx];
+        const amount = parseFloat(parts[amountIdx]);
+        const desc = descIdx >= 0 ? parts[descIdx] : 'Bank Import';
+
+        if (!dateStr || isNaN(amount) || amount <= 0) continue;
+
+        const cat = autoCategorize(desc);
+        const expense = {
+          id: Date.now() + Math.random(),
+          amount,
+          category: cat,
+          description: desc.substring(0, 50),
+          date: dateStr,
+          notes: 'Imported from CSV'
+        };
+        expenses.push(expense);
+        added++;
+      }
+
+      if (added === 0) { showToast('No valid transactions found.'); return; }
+      save();
+      renderAll();
+      document.getElementById('csv-upload').value = '';
+      showToast(`Imported ${added} transaction${added !== 1 ? 's' : ''}!`);
+    };
+    reader.readAsText(file);
+  }
+
+  function autoCategorize(desc) {
+    const d = desc.toLowerCase();
+    if (d.match(/restaurant|cafe|food|grocery|supermarket|pizza|burger|lunch|dinner|coffee/)) return 'Food';
+    if (d.match(/uber|taxi|fuel|gas|parking|bus|train|transport|petrol/)) return 'Transport';
+    if (d.match(/shop|store|amazon|ebay|mall|clothing|boots|asda|tesco|sainsbury/)) return 'Shopping';
+    if (d.match(/cinema|movie|spotify|netflix|game|entertainment|pub|bar|gig/)) return 'Entertainment';
+    if (d.match(/doctor|pharmacy|medicine|hospital|dental|health|gym|fitness/)) return 'Health';
+    if (d.match(/electric|water|gas|phone|internet|insurance|rent|mortgage|bill/)) return 'Bills';
+    if (d.match(/book|course|school|university|education|training/)) return 'Education';
+    return 'Other';
   }
 
   renderAll();
