@@ -284,6 +284,23 @@ function saveCategoryBudgets() {
   render();
 }
 
+function editTxn(id) {
+  const txn = txns.find(t => t.id === id);
+  if (!txn) return;
+  const newAmount = prompt(`Edit amount for "${txn.desc}":\n\nCurrent: €${txn.amount.toFixed(2)}`, txn.amount.toFixed(2));
+  if (newAmount !== null && newAmount !== '') {
+    const amount = parseFloat(newAmount);
+    if (amount > 0) {
+      txn.amount = amount;
+      save();
+      render();
+      alert('✅ Amount updated!');
+    } else {
+      alert('Enter a valid amount');
+    }
+  }
+}
+
 function deleteTxn(id) {
   if (confirm('Delete this transaction?')) {
     txns = txns.filter(t => t.id !== id);
@@ -364,9 +381,9 @@ function filterTransactions() {
         <div class="transaction-desc">${t.desc}</div>
         <div class="transaction-meta">${t.category} • ${t.date}</div>
       </div>
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <div class="transaction-amount">€${t.amount.toFixed(2)}</div>
-        <button class="delete-btn" onclick="deleteTxn(${t.id})">×</button>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="transaction-amount" style="cursor: pointer;" onclick="editTxn(${t.id})" title="Click to edit">€${t.amount.toFixed(2)}</div>
+        <button class="delete-btn" onclick="deleteTxn(${t.id})" title="Delete">×</button>
       </div>
     </div>
   `).join('') : '<div style="text-align: center; color: #8892b0; padding: 20px;">No transactions yet</div>';
