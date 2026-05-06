@@ -233,9 +233,58 @@
       </div>
     </div>
 
+    <!-- Quick add modal -->
+    <div id="quick-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:999;flex-direction:column;">
+      <div style="background:white;border-radius:12px;padding:32px;max-width:400px;width:90%;">
+        <h2 style="margin-bottom:20px;">Quick Add</h2>
+        <div class="form-group">
+          <label>Amount (€)</label>
+          <input type="number" id="quick-amount" placeholder="0.00" min="0.01" step="0.01" autofocus />
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="quick-cat">
+            <option value="Food">🍔 Food</option>
+            <option value="Transport">🚗 Transport</option>
+            <option value="Shopping">🛍️ Shopping</option>
+            <option value="Entertainment">🎬 Entertainment</option>
+            <option value="Health">💊 Health</option>
+            <option value="Bills">🧾 Bills</option>
+            <option value="Education">📚 Education</option>
+            <option value="Other">📦 Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>What for?</label>
+          <input type="text" id="quick-desc" placeholder="e.g. Lunch" />
+        </div>
+        <div style="display:flex;gap:12px;">
+          <button class="btn" onclick="saveQuick()" style="flex:1;">Add</button>
+          <button class="btn" onclick="closeQuick()" style="flex:1;background:#e5e7eb;color:#1f2937;">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Weekly summary modal -->
+    <div id="weekly-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:999;flex-direction:column;">
+      <div style="background:white;border-radius:12px;padding:32px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <h2>Weekly Summary</h2>
+          <button onclick="closeWeekly()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;">✕</button>
+        </div>
+        <div id="weekly-content"></div>
+      </div>
+    </div>
+
     <!-- Right: Transactions -->
     <div class="panel">
-      <h2>Transactions</h2>
+      <h2 style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        Transactions
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="openQuick()" style="width:auto;padding:8px 16px;font-size:0.85rem;background:#667eea;">⚡ Quick</button>
+          <button class="btn" onclick="openWeekly()" style="width:auto;padding:8px 16px;font-size:0.85rem;background:#667eea;">📊 Weekly</button>
+        </div>
+      </h2>
       <div class="filter-bar">
         <input type="text" id="search" placeholder="Search..." oninput="render()" />
         <select id="filter-cat" onchange="render()">
@@ -437,6 +486,104 @@
     if (d.match(/electric|water|gas|phone|internet|insurance|rent|mortgage|bill|council|utilities/)) return 'Bills';
     if (d.match(/book|course|school|university|education|training|tuition|exam/)) return 'Education';
     return 'Other';
+  }
+
+  function openQuick() {
+    document.getElementById('quick-modal').style.display = 'flex';
+    document.getElementById('quick-amount').focus();
+  }
+
+  function closeQuick() {
+    document.getElementById('quick-modal').style.display = 'none';
+    document.getElementById('quick-amount').value = '';
+    document.getElementById('quick-desc').value = '';
+  }
+
+  function saveQuick() {
+    const amt = parseFloat(document.getElementById('quick-amount').value);
+    const cat = document.getElementById('quick-cat').value;
+    const desc = document.getElementById('quick-desc').value.trim();
+
+    if (!amt || amt <= 0) { toast('Enter amount'); return; }
+    if (!desc) { toast('Describe it'); return; }
+
+    txns.push({
+      id: Date.now() + Math.random(),
+      date: new Date().toISOString().split('T')[0],
+      amount: amt,
+      desc: desc.substring(0, 40),
+      cat: cat,
+      recurring: isRecurring(desc),
+    });
+
+    save();
+    render();
+    closeQuick();
+    toast('Added!');
+  }
+
+  function openWeekly() {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const weekTxns = txns.filter(t => {
+      const d = new Date(t.date + 'T00:00:00');
+      return d >= startOfWeek && d <= now;
+    });
+
+    const catTotals = {};
+    let weekTotal = 0;
+    weekTxns.forEach(t => {
+      catTotals[t.cat] = (catTotals[t.cat] || 0) + t.amount;
+      weekTotal += t.amount;
+    });
+
+    const sorted = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+
+    const startDate = startOfWeek.toLocaleDateString('en-IE', { month: 'short', day: 'numeric' });
+    const endDate = now.toLocaleDateString('en-IE', { month: 'short', day: 'numeric' });
+
+    let html = `
+      <div style="text-align:center;margin-bottom:24px;">
+        <div style="font-size:0.9rem;color:#6b7280;margin-bottom:8px;">Week of ${startDate} - ${endDate}</div>
+        <div style="font-size:2.2rem;font-weight:800;color:#667eea;">€${weekTotal.toFixed(2)}</div>
+        <div style="font-size:0.85rem;color:#9ca3af;margin-top:4px;">${weekTxns.length} transactions</div>
+      </div>
+
+      <h3 style="margin-bottom:12px;font-size:0.95rem;color:#374151;">Breakdown</h3>
+    `;
+
+    if (sorted.length === 0) {
+      html += '<div style="text-align:center;color:#9ca3af;padding:20px;">No spending this week!</div>';
+    } else {
+      const colors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe', '#43e97b', '#fa709a', '#fee140'];
+      html += '<div style="display:flex;flex-direction:column;gap:12px;">';
+      sorted.forEach(([cat, amt], i) => {
+        const pct = (amt / weekTotal * 100).toFixed(0);
+        html += `
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="font-size:1.2rem;">${ICONS[cat]}</div>
+            <div style="flex:1;">
+              <div style="font-weight:500;font-size:0.9rem;">${cat}</div>
+              <div style="font-size:0.75rem;color:#9ca3af;">${pct}% • €${amt.toFixed(2)}</div>
+            </div>
+            <div style="width:60px;height:6px;background:#e5e7eb;border-radius:99px;overflow:hidden;">
+              <div style="width:${pct}%;height:100%;background:${colors[i % colors.length]};"></div>
+            </div>
+          </div>
+        `;
+      });
+      html += '</div>';
+    }
+
+    document.getElementById('weekly-content').innerHTML = html;
+    document.getElementById('weekly-modal').style.display = 'flex';
+  }
+
+  function closeWeekly() {
+    document.getElementById('weekly-modal').style.display = 'none';
   }
 
   function render() {
