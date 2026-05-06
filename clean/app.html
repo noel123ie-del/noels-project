@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Noel - Budget Tracker</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.plaid.com/link/v3/stable/link-initialize.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; color: #2c3e50; line-height: 1.6; }
@@ -140,6 +141,12 @@
     </div>
 
     <div class="form-card">
+      <h3>🔮 Next Month Forecast</h3>
+      <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Based on last 6 months of spending</p>
+      <div id="forecastDisplay"></div>
+    </div>
+
+    <div class="form-card">
       <h3>📝 Recent Transactions</h3>
       <div id="filteredTransactionsList"></div>
     </div>
@@ -213,11 +220,11 @@
   <!-- Settings -->
   <div id="settings" class="section">
     <div class="form-card">
-      <h3>🔗 Open Banking</h3>
-      <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Connect via Tink or TrueLayer (sandbox mode)</p>
-      <button class="btn btn-primary" id="connectTinkBtn" onclick="connectTink()" style="width: 100%; margin-bottom: 12px;">Connect via Tink</button>
-      <button class="btn btn-secondary" onclick="connectTrueLayer()" style="width: 100%; margin-bottom: 12px;">Connect via TrueLayer</button>
+      <h3>🔗 Connect Your Bank (Plaid)</h3>
+      <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Link your Irish bank account securely via Plaid</p>
+      <button class="btn btn-primary" id="plaidButton" onclick="openPlaidLink()" style="width: 100%; margin-bottom: 12px;">🏦 Connect Bank Account</button>
       <div id="bankStatus" style="font-size: 0.9rem; color: #8fa3b8; margin-top: 12px;"></div>
+      <p style="color: #8fa3b8; margin-top: 12px; font-size: 0.85rem;"><strong>Note:</strong> Add your Plaid Client ID in settings.js to enable live connections</p>
     </div>
 
     <div class="form-card">
@@ -344,13 +351,61 @@ function clearAllData() {
   }
 }
 
-function connectTink() {
-  alert('🏦 Tink Integration (Sandbox)\n\nClick OK to simulate connecting to Tink.');
-  simulateBankSync();
+const PLAID_CLIENT_ID = 'YOUR_PLAID_CLIENT_ID'; // Add your Plaid Client ID here
+const PLAID_ENV = 'sandbox'; // Change to 'production' when ready
+
+let plaidHandler = null;
+
+function initPlaidLink() {
+  if (PLAID_CLIENT_ID === 'YOUR_PLAID_CLIENT_ID') {
+    console.log('⚠️ Plaid Client ID not configured. Using demo mode.');
+    return;
+  }
+
+  fetch(`https://${PLAID_ENV}.plaid.com/link/token/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user: { client_user_id: 'user-' + Date.now() },
+      client_name: 'Noel Budget Tracker',
+      language: 'en',
+      products: ['auth', 'transactions'],
+      country_codes: ['IE', 'GB', 'EU'],
+      institutions: [],
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.link_token) {
+      plaidHandler = Plaid.create({
+        token: data.link_token,
+        onSuccess: (publicToken) => {
+          console.log('✅ Bank connected:', publicToken);
+          exchangeToken(publicToken);
+        },
+        onExit: (err) => {
+          if (err) console.log('User exited Plaid:', err);
+        }
+      });
+    }
+  })
+  .catch(err => console.log('Plaid init error (demo mode):', err));
 }
 
-function connectTrueLayer() {
-  alert('🏦 TrueLayer Integration (Sandbox)\n\nClick OK to simulate connecting to TrueLayer.');
+function openPlaidLink() {
+  if (plaidHandler) {
+    plaidHandler.open();
+  } else {
+    // Demo mode if no Plaid credentials
+    alert('🏦 Demo Mode\n\nPlaid not configured. Click OK for simulated bank sync.\n\nTo enable real connections, add your Plaid Client ID.');
+    simulateBankSync();
+  }
+}
+
+function exchangeToken(publicToken) {
+  // In production, send publicToken to your backend to exchange for access_token
+  console.log('Public token received:', publicToken);
+  alert('✅ Bank connected! In production, this token would be exchanged for live transaction access.');
   simulateBankSync();
 }
 
@@ -523,6 +578,7 @@ function render() {
 }
 
 render();
+initPlaidLink();
 </script>
 
 </body>
