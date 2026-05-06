@@ -308,31 +308,74 @@
     const reader = new FileReader();
     reader.onload = e => {
       const lines = e.target.result.split('\n').filter(l => l.trim());
+      if (lines.length < 2) { toast('Empty file.'); return; }
+
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-      const dateIdx = headers.findIndex(h => h.includes('date'));
-      const amtIdx = headers.findIndex(h => h.includes('amount') || h.includes('debit') || h.includes('credit'));
-      const descIdx = headers.findIndex(h => h.includes('desc') || h.includes('merchant'));
+
+      // Flexible column detection
+      const dateIdx = headers.findIndex(h =>
+        h.match(/date|transaction.*date|posting.*date|post date|value date/)
+      );
+      const amtIdx = headers.findIndex(h =>
+        h.match(/amount|value|debit|credit|withdrawal|deposit|transaction amount|trans amount/)
+      );
+      const descIdx = headers.findIndex(h =>
+        h.match(/description|merchant|payee|details|narrative|reference|trans desc|type/)
+      );
 
       if (dateIdx === -1 || amtIdx === -1) {
-        toast('Need Date and Amount columns.');
+        toast('Could not find Date and Amount columns. Please check CSV format.');
         return;
       }
 
       let added = 0;
       for (let i = 1; i < lines.length; i++) {
-        const parts = lines[i].split(',').map(p => p.trim());
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        let parts;
+        // Handle quoted CSV fields
+        if (line.includes('"')) {
+          parts = [];
+          let current = '';
+          let inQuotes = false;
+          for (let j = 0; j < line.length; j++) {
+            if (line[j] === '"') {
+              inQuotes = !inQuotes;
+            } else if (line[j] === ',' && !inQuotes) {
+              parts.push(current.trim());
+              current = '';
+            } else {
+              current += line[j];
+            }
+          }
+          parts.push(current.trim());
+        } else {
+          parts = line.split(',').map(p => p.trim());
+        }
+
         if (parts.length <= Math.max(dateIdx, amtIdx)) continue;
 
-        const amt = parseFloat(parts[amtIdx]);
-        if (!parts[dateIdx] || isNaN(amt) || amt <= 0) continue;
+        let dateStr = parts[dateIdx].trim();
+        let amtStr = parts[amtIdx].trim();
+        let desc = descIdx >= 0 ? parts[descIdx].trim() : 'Transaction';
 
-        const desc = descIdx >= 0 ? parts[descIdx] : 'Transaction';
-        const existing = txns.find(t => t.date === parts[dateIdx] && t.amount === amt && t.desc === desc);
+        // Parse amount (handle +/- and currency symbols)
+        amtStr = amtStr.replace(/[€$£¥,]/g, '').trim();
+        if (amtStr.startsWith('-')) amtStr = amtStr.substring(1);
+        const amt = parseFloat(amtStr);
+
+        // Parse date (flexible)
+        if (!dateStr || isNaN(amt) || amt <= 0) continue;
+        dateStr = normalizeDate(dateStr);
+        if (!dateStr) continue;
+
+        const existing = txns.find(t => t.date === dateStr && t.amount === amt && t.desc === desc);
         if (existing) continue;
 
         txns.push({
           id: Date.now() + Math.random(),
-          date: parts[dateIdx],
+          date: dateStr,
           amount: amt,
           desc: desc.substring(0, 40),
           cat: autoCat(desc),
@@ -351,6 +394,32 @@
       toast(`Added ${added} transaction${added !== 1 ? 's' : ''}!`);
     };
     reader.readAsText(file);
+  }
+
+  function normalizeDate(dateStr) {
+    // Try common formats
+    const formats = [
+      /^(\d{4})-(\d{1,2})-(\d{1,2})/, // 2026-01-15
+      /^(\d{1,2})\/(\d{1,2})\/(\d{4})/, // 15/01/2026
+      /^(\d{1,2})-(\d{1,2})-(\d{4})/, // 15-01-2026
+      /^(\d{1,2})\s+(\w{3})\s+(\d{4})/, // 15 Jan 2026
+    ];
+
+    for (const fmt of formats) {
+      const match = dateStr.match(fmt);
+      if (match) {
+        let y, m, d;
+        if (fmt === formats[0]) { y = match[1]; m = match[2]; d = match[3]; }
+        else if (fmt === formats[1]) { d = match[1]; m = match[2]; y = match[3]; }
+        else if (fmt === formats[2]) { d = match[1]; m = match[2]; y = match[3]; }
+        else if (fmt === formats[3]) { d = match[1]; m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(match[2])+1; y = match[3]; }
+
+        m = String(m).padStart(2, '0');
+        d = String(d).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+    }
+    return null;
   }
 
   function isRecurring(desc) {
