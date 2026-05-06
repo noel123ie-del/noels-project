@@ -3,275 +3,481 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Noel Project</title>
+  <title>Noel Project - Smart Spending Tracker</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; color: #1a1a2e; }
 
-    nav { background: white; border-bottom: 1px solid #e5e7eb; padding: 12px 20px; display: flex; gap: 24px; position: sticky; top: 0; z-index: 100; overflow-x: auto; }
-    nav button { background: none; border: none; font-size: 0.95rem; color: #6b7280; cursor: pointer; padding: 8px 0; border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap; }
-    nav button.active { color: #667eea; border-bottom-color: #667eea; font-weight: 600; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+      background: #fafbfc;
+      color: #2c3e50;
+      line-height: 1.6;
+    }
 
-    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    /* Navigation */
+    nav {
+      background: white;
+      border-bottom: 1px solid #e8eef5;
+      padding: 16px 24px;
+      display: flex;
+      gap: 32px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      overflow-x: auto;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    nav button {
+      background: none;
+      border: none;
+      font-size: 0.95rem;
+      color: #8fa3b8;
+      cursor: pointer;
+      padding: 8px 0;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+      font-weight: 500;
+    }
+
+    nav button.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+      font-weight: 600;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 24px;
+    }
+
     .section { display: none; }
     .section.active { display: block; }
 
-    .dash-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
-    @media (max-width: 1024px) { .dash-grid { grid-template-columns: 1fr; } }
+    /* Typography */
+    h1 { font-size: 2.2rem; font-weight: 700; margin-bottom: 12px; color: #1a1f3a; }
+    h2 { font-size: 1.6rem; font-weight: 700; margin-bottom: 8px; color: #1a1f3a; }
+    h3 { font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: #2c3e50; }
+    .subtitle { font-size: 1rem; color: #8fa3b8; margin-bottom: 24px; line-height: 1.5; }
 
-    .card { background: white; border-radius: 12px; padding: 20px; border: 1px solid #e5e7eb; margin-bottom: 20px; }
-    .card h2 { font-size: 1rem; margin-bottom: 16px; color: #374151; font-weight: 700; }
-    .card h3 { font-size: 0.9rem; margin: 16px 0 12px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    /* Card */
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      border: 1px solid #e8eef5;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      transition: all 0.2s;
+    }
 
-    .spending-line { display: flex; align-items: center; gap: 16px; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; color: white; margin-bottom: 20px; }
-    .spending-line-value { font-size: 2.2rem; font-weight: 800; }
-    .spending-line-meta { font-size: 0.9rem; opacity: 0.9; }
+    .card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
 
-    .stat-card { background: white; border-radius: 10px; padding: 16px; border: 1px solid #e5e7eb; text-align: center; }
-    .stat-card .value { font-size: 1.8rem; font-weight: 800; color: #667eea; margin-top: 8px; }
-    .stat-card .label { font-size: 0.8rem; color: #6b7280; }
+    /* Hero section */
+    .hero {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 16px;
+      padding: 48px 40px;
+      color: white;
+      margin-bottom: 40px;
+      text-align: center;
+    }
 
-    .alert-box { padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid; }
-    .alert-box.danger { background: #fef2f2; border-left-color: #ef4444; }
-    .alert-box.warn { background: #fef3c7; border-left-color: #f59e0b; }
-    .alert-box.info { background: #eff6ff; border-left-color: #3b82f6; }
+    .hero h1 { color: white; font-size: 2.6rem; margin-bottom: 16px; }
+    .hero .subtitle { color: rgba(255, 255, 255, 0.9); }
 
-    .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; font-size: 0.8rem; color: #6b7280; margin-bottom: 4px; font-weight: 500; }
-    .form-group input, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.9rem; font-family: inherit; }
-    .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1); }
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+      margin-bottom: 32px;
+    }
 
-    .btn { padding: 10px 16px; background: #667eea; color: white; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-    .btn:hover { background: #5a67d8; }
-    .btn.secondary { background: #e5e7eb; color: #1f2937; }
+    .stat-box {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid #e8eef5;
+      text-align: center;
+    }
+
+    .stat-value { font-size: 2.4rem; font-weight: 800; color: #667eea; margin: 12px 0; }
+    .stat-label { font-size: 0.9rem; color: #8fa3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 24px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.95rem;
+      color: #2c3e50;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid #e8eef5;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 14px 28px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-block;
+    }
+
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3); }
+    .btn.secondary { background: #f0f4ff; color: #667eea; }
+    .btn.secondary:hover { background: #e8eef5; }
     .btn.danger { background: #ef4444; }
     .btn.success { background: #2ecc71; }
 
-    .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f3f4f6; }
+    /* List items */
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 0;
+      border-bottom: 1px solid #f0f4ff;
+    }
+
     .list-item:last-child { border-bottom: none; }
+    .list-item-title { font-weight: 600; color: #1a1f3a; margin-bottom: 4px; }
+    .list-item-meta { font-size: 0.85rem; color: #8fa3b8; }
+    .list-item-amount { font-size: 1.2rem; font-weight: 700; color: #667eea; }
+    .list-item-amount.negative { color: #ef4444; }
 
-    .progress-bar { height: 6px; background: #e5e7eb; border-radius: 99px; overflow: hidden; margin-top: 4px; }
-    .progress-bar-fill { height: 100%; border-radius: 99px; transition: width 0.3s; }
+    /* Progress bar */
+    .progress-bar {
+      height: 8px;
+      background: #e8eef5;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
 
-    .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); align-items: center; justify-content: center; z-index: 999; }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+
+    /* Alert */
+    .alert {
+      padding: 16px 20px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      border-left: 4px solid;
+    }
+
+    .alert.danger { background: #fff5f5; border-left-color: #ef4444; color: #c53030; }
+    .alert.warn { background: #fffaf0; border-left-color: #f59e0b; color: #d97706; }
+    .alert.info { background: #f0f9ff; border-left-color: #3b82f6; color: #1e40af; }
+
+    /* Upload area */
+    .upload-area {
+      border: 2px dashed #d1d8e8;
+      border-radius: 12px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: #f8faff;
+    }
+
+    .upload-area:hover {
+      border-color: #667eea;
+      background: #f0f4ff;
+    }
+
+    .upload-icon { font-size: 3rem; margin-bottom: 12px; }
+    .upload-text { font-weight: 600; color: #1a1f3a; margin-bottom: 4px; }
+    .upload-hint { font-size: 0.85rem; color: #8fa3b8; }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #8fa3b8;
+    }
+
+    .empty-state .icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.5; }
+    .empty-state p { font-size: 1rem; margin-bottom: 16px; }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.4);
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+
     .modal.active { display: flex; }
-    .modal-content { background: white; border-radius: 12px; padding: 24px; max-width: 400px; width: 90%; }
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 450px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    }
 
-    #toast { position: fixed; bottom: 20px; right: 20px; background: #1f2937; color: white; padding: 12px 18px; border-radius: 8px; font-size: 0.9rem; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .modal-header h2 { margin: 0; }
+    .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #8fa3b8; }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1a1f3a;
+      color: white;
+      padding: 14px 24px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    }
+
     #toast.show { opacity: 1; }
+
+    /* Grid layout */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+    @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
 
 <nav>
-  <button class="active" onclick="switchTab('dashboard')">💰 Dashboard</button>
-  <button onclick="switchTab('forecast')">📈 Forecast</button>
+  <button class="active" onclick="switchTab('dashboard')">📊 Dashboard</button>
+  <button onclick="switchTab('summary')">📈 Last 6 Months</button>
   <button onclick="switchTab('income')">💵 Income</button>
-  <button onclick="switchTab('spending')">📊 Spending</button>
+  <button onclick="switchTab('spending')">💸 Spending</button>
   <button onclick="switchTab('bills')">📋 Bills</button>
-  <button onclick="switchTab('budgets')">🎯 Budgets</button>
-  <button onclick="switchTab('accounts')">🏦 Accounts</button>
   <button onclick="switchTab('settings')">⚙️ Settings</button>
 </nav>
 
 <div class="container">
 
-  <!-- Forecast -->
-  <div id="forecast" class="section">
-    <div class="card">
-      <h2>📊 Last 6 Months Summary</h2>
-      <p style="font-size:0.85rem;color:#6b7280;margin-bottom:16px;">Actual income, expenses & bills for the past 6 months</p>
-      <div id="forecast-table" style="overflow-x:auto;"></div>
-    </div>
-
-    <div class="card">
-      <h2>🔄 Recurring Bills Setup</h2>
-      <p style="font-size:0.85rem;color:#6b7280;margin-bottom:12px;">These bills will be projected forward 6 months</p>
-      <div class="form-group">
-        <label>Add Recurring Bill Template</label>
-        <input type="text" id="template-name" placeholder="e.g. ESB, Mortgage, Rent" />
-      </div>
-      <div class="form-group">
-        <label>Monthly Amount (€)</label>
-        <input type="number" id="template-amount" placeholder="0.00" min="0.01" />
-      </div>
-      <div class="form-group">
-        <label>Day of Month (1-31)</label>
-        <input type="number" id="template-day" placeholder="1" min="1" max="31" />
-      </div>
-      <button class="btn" onclick="addRecurringTemplate()">Add Template</button>
-      <div id="templates-list" style="margin-top:16px;"></div>
-    </div>
-  </div>
-
   <!-- Dashboard -->
   <div id="dashboard" class="section active">
-    <div class="spending-line">
-      <div>
-        <div class="spending-line-value" id="month-spend">€0</div>
-        <div class="spending-line-meta">This month</div>
+    <div class="hero">
+      <h1>Money & time, made simple</h1>
+      <p class="subtitle">See your money clearly in 2 minutes</p>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-label">This Month</div>
+        <div class="stat-value" id="month-spend">€0</div>
+        <div style="font-size:0.85rem;color:#8fa3b8;">Spending</div>
       </div>
-      <div style="flex:1;text-align:right;">
-        <div style="font-size:1.3rem;font-weight:700;" id="month-income">€0</div>
-        <div class="spending-line-meta">This month</div>
+      <div class="stat-box">
+        <div class="stat-label">Income</div>
+        <div class="stat-value" id="month-income">€0</div>
+        <div style="font-size:0.85rem;color:#8fa3b8;">This month</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Net Worth</div>
+        <div class="stat-value" id="net-worth">€0</div>
+        <div style="font-size:0.85rem;color:#8fa3b8;">Total</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Upcoming</div>
+        <div class="stat-value" id="bills-due">€0</div>
+        <div style="font-size:0.85rem;color:#8fa3b8;">Bills due</div>
       </div>
     </div>
 
-    <!-- Alerts -->
     <div id="alerts-section"></div>
 
-    <div class="dash-grid">
+    <div class="two-col">
       <div>
         <div class="card">
-          <h2>📊 Net Worth</h2>
-          <div style="font-size:2.2rem;font-weight:800;color:#667eea;margin:16px 0;" id="net-worth">€0</div>
-          <div style="font-size:0.85rem;color:#6b7280;">
-            <div>Income: <strong id="nw-income">€0</strong></div>
-            <div>Spending: <strong id="nw-spending">€0</strong></div>
-            <div style="margin-top:8px;border-top:1px solid #f3f4f6;padding-top:8px;">Savings: <strong id="nw-savings">€0</strong></div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2>🎯 Upcoming Bills</h2>
+          <h3>🔄 Upcoming Bills</h3>
           <div id="upcoming-bills"></div>
         </div>
       </div>
-
       <div>
         <div class="card">
-          <h2>Quick Stats</h2>
+          <h3>💰 Quick Stats</h3>
           <div class="list-item">
-            <span>Transactions</span>
-            <strong id="stat-txns">0</strong>
+            <span class="list-item-title">Transactions</span>
+            <span class="list-item-amount" id="stat-txns">0</span>
           </div>
           <div class="list-item">
-            <span>Income Entries</span>
-            <strong id="stat-income">0</strong>
+            <span class="list-item-title">Income Entries</span>
+            <span class="list-item-amount" id="stat-income">0</span>
           </div>
           <div class="list-item">
-            <span>Bills</span>
-            <strong id="stat-bills">0</strong>
+            <span class="list-item-title">Bills</span>
+            <span class="list-item-amount" id="stat-bills">0</span>
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Last 6 Months -->
+  <div id="summary" class="section">
+    <h1>Last 6 Months</h1>
+    <p class="subtitle">See your spending patterns over time</p>
+    <div class="card">
+      <div id="forecast-table" style="overflow-x:auto;"></div>
     </div>
   </div>
 
   <!-- Income -->
   <div id="income" class="section">
-    <div class="card">
-      <h2>💵 Add Income</h2>
-      <div class="form-group">
-        <label>Amount (€)</label>
-        <input type="number" id="income-amount" placeholder="0.00" min="0.01" />
+    <h1>💵 Income</h1>
+    <p class="subtitle">Track your earnings</p>
+    <div class="two-col">
+      <div>
+        <div class="card">
+          <h3>Add Income</h3>
+          <div class="form-group">
+            <label>Amount (€)</label>
+            <input type="number" id="income-amount" placeholder="0.00" min="0.01" />
+          </div>
+          <div class="form-group">
+            <label>Source</label>
+            <input type="text" id="income-source" placeholder="e.g. Salary" />
+          </div>
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" id="income-date" />
+          </div>
+          <button class="btn" onclick="addIncome()" style="width:100%;">Add Income</button>
+        </div>
       </div>
-      <div class="form-group">
-        <label>Source</label>
-        <input type="text" id="income-source" placeholder="e.g. Salary" />
+      <div>
+        <div class="card">
+          <h3>Income History</h3>
+          <div id="income-list"></div>
+        </div>
       </div>
-      <div class="form-group">
-        <label>Date</label>
-        <input type="date" id="income-date" />
-      </div>
-      <button class="btn" onclick="addIncome()">Add Income</button>
-    </div>
-
-    <div class="card">
-      <h2>Income History</h2>
-      <div id="income-list"></div>
     </div>
   </div>
 
   <!-- Spending -->
   <div id="spending" class="section">
+    <h1>💸 Spending</h1>
+    <p class="subtitle">Where your money goes</p>
     <div class="card">
-      <h2>💸 Transactions</h2>
-      <input type="text" id="search" placeholder="Search..." style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:12px;" oninput="renderSpending()" />
+      <input type="text" id="search" placeholder="Search transactions..." style="width:100%;padding:12px 16px;border:1px solid #e8eef5;border-radius:12px;margin-bottom:20px;font-size:1rem;" oninput="renderSpending()" />
       <div id="txn-list"></div>
     </div>
   </div>
 
   <!-- Bills -->
   <div id="bills" class="section">
-    <div class="card">
-      <h2>📋 Add Bill Reminder</h2>
-      <div class="form-group">
-        <label>Bill Name</label>
-        <input type="text" id="bill-name" placeholder="e.g. Netflix" />
+    <h1>📋 Bills & Reminders</h1>
+    <p class="subtitle">Stay on top of your payments</p>
+    <div class="two-col">
+      <div>
+        <div class="card">
+          <h3>Add Bill Reminder</h3>
+          <div class="form-group">
+            <label>Bill Name</label>
+            <input type="text" id="bill-name" placeholder="e.g. Netflix" />
+          </div>
+          <div class="form-group">
+            <label>Amount (€)</label>
+            <input type="number" id="bill-amount" placeholder="0.00" min="0.01" />
+          </div>
+          <div class="form-group">
+            <label>Due Date</label>
+            <input type="date" id="bill-date" />
+          </div>
+          <div class="form-group">
+            <label>Frequency</label>
+            <select id="bill-frequency">
+              <option value="once">Once</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+          <button class="btn" onclick="addBill()" style="width:100%;">Add Bill</button>
+        </div>
       </div>
-      <div class="form-group">
-        <label>Amount (€)</label>
-        <input type="number" id="bill-amount" placeholder="0.00" min="0.01" />
+      <div>
+        <div class="card">
+          <h3>Your Bills</h3>
+          <div id="bills-list"></div>
+        </div>
       </div>
-      <div class="form-group">
-        <label>Due Date</label>
-        <input type="date" id="bill-date" />
-      </div>
-      <div class="form-group">
-        <label>Frequency</label>
-        <select id="bill-frequency">
-          <option value="once">Once</option>
-          <option value="weekly">Weekly</option>
-          <option value="monthly">Monthly</option>
-          <option value="yearly">Yearly</option>
-        </select>
-      </div>
-      <button class="btn" onclick="addBill()">Add Bill</button>
-    </div>
-
-    <div class="card">
-      <h2>Your Bills</h2>
-      <div id="bills-list"></div>
-    </div>
-  </div>
-
-  <!-- Budgets -->
-  <div id="budgets" class="section">
-    <div class="card">
-      <h2>🎯 Budgets</h2>
-      <h3>Weekly Budget</h3>
-      <div class="form-group">
-        <input type="number" id="weekly-budget" placeholder="€300" min="0" />
-      </div>
-      <button class="btn" onclick="saveWeeklyBudget()">Save</button>
-
-      <h3 style="margin-top:20px;">Category Budgets</h3>
-      <div id="cat-budgets"></div>
-      <button class="btn" onclick="saveCategoryBudgets()" style="margin-top:12px;">Save All</button>
-    </div>
-  </div>
-
-  <!-- Accounts -->
-  <div id="accounts" class="section">
-    <div class="card">
-      <h2>📤 Import CSV</h2>
-      <div style="border:2px dashed #d1d5db;border-radius:10px;padding:32px;text-align:center;cursor:pointer;background:#f9fafb;" id="upload-area" onclick="document.getElementById('csv-input').click()" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
-        <div style="font-size:2rem;margin-bottom:8px;">📥</div>
-        <div>Drop CSV or click</div>
-        <input type="file" id="csv-input" accept=".csv" style="display:none;" onchange="importCSV()" />
-      </div>
-    </div>
-
-    <div class="card">
-      <button class="btn success" onclick="loadSampleData()" style="width:100%;">Load Sample Data</button>
     </div>
   </div>
 
   <!-- Settings -->
   <div id="settings" class="section">
+    <h1>⚙️ Settings</h1>
+    <p class="subtitle">Customize your experience</p>
+
     <div class="card">
-      <h2>⚠️ Alert Thresholds</h2>
-      <div class="form-group">
-        <label>Alert when spending exceeds weekly budget by (%):</label>
-        <input type="number" id="alert-threshold" placeholder="75" min="0" max="200" />
+      <h3>📤 Import Data</h3>
+      <p style="color:#8fa3b8;margin-bottom:20px;font-size:0.95rem;">Upload your bank CSV statements</p>
+      <div class="upload-area" id="upload-area" onclick="document.getElementById('csv-input').click()" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+        <div class="upload-icon">📥</div>
+        <div class="upload-text">Drop CSV or click</div>
+        <div class="upload-hint">Supports most bank formats</div>
+        <input type="file" id="csv-input" accept=".csv" style="display:none;" onchange="importCSV()" />
       </div>
-      <button class="btn" onclick="saveAlertThreshold()">Save</button>
     </div>
 
     <div class="card">
-      <h2>📊 Export</h2>
-      <button class="btn secondary" onclick="exportCSV()" style="width:100%;margin-bottom:8px;">Export as CSV</button>
+      <h3>🎬 Demo Data</h3>
+      <p style="color:#8fa3b8;margin-bottom:20px;font-size:0.95rem;">Explore with sample transactions</p>
+      <button class="btn success" onclick="loadSampleData()" style="width:100%;">Load Sample Data</button>
+    </div>
+
+    <div class="card">
+      <h3>📊 Export & Clear</h3>
+      <button class="btn secondary" onclick="exportCSV()" style="width:100%;margin-bottom:12px;">Export as CSV</button>
       <button class="btn danger" onclick="clearAllData()" style="width:100%;">Clear All Data</button>
     </div>
   </div>
@@ -286,12 +492,9 @@
   let txns = JSON.parse(localStorage.getItem('txns') || '[]');
   let income = JSON.parse(localStorage.getItem('income') || '[]');
   let bills = JSON.parse(localStorage.getItem('bills') || '[]');
-  let recurringTemplates = JSON.parse(localStorage.getItem('recurringTemplates') || '[]');
-  let weeklyBudget = parseFloat(localStorage.getItem('weeklyBudget') || '0');
-  let catBudgets = JSON.parse(localStorage.getItem('catBudgets') || '{}');
-  let alertThreshold = parseFloat(localStorage.getItem('alertThreshold') || '75');
 
   document.getElementById('income-date').valueAsDate = new Date();
+  document.getElementById('bill-date').valueAsDate = new Date();
 
   function switchTab(tab) {
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -303,168 +506,40 @@
 
   function render() {
     renderDashboard();
-    renderForecast();
     renderIncome();
     renderSpending();
     renderBills();
-    renderBudgets();
-    renderRecurringTemplates();
-  }
-
-  function addRecurringTemplate() {
-    const name = document.getElementById('template-name').value.trim();
-    const amt = parseFloat(document.getElementById('template-amount').value);
-    const day = parseInt(document.getElementById('template-day').value) || 1;
-    if (!name || !amt) { toast('Fill all fields'); return; }
-    recurringTemplates.push({ id: Date.now(), name, amount: amt, dayOfMonth: day });
-    localStorage.setItem('recurringTemplates', JSON.stringify(recurringTemplates));
-    document.getElementById('template-name').value = '';
-    document.getElementById('template-amount').value = '';
-    document.getElementById('template-day').value = '';
-    render();
-    toast('Template added!');
-  }
-
-  function deleteTemplate(id) {
-    recurringTemplates = recurringTemplates.filter(t => t.id !== id);
-    localStorage.setItem('recurringTemplates', JSON.stringify(recurringTemplates));
-    render();
-  }
-
-  function renderRecurringTemplates() {
-    const container = document.getElementById('templates-list');
-    if (recurringTemplates.length === 0) {
-      container.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem;text-align:center;padding:12px;">No templates yet</div>';
-      return;
-    }
-    container.innerHTML = recurringTemplates.map(t => `
-      <div class="list-item">
-        <div>
-          <div style="font-weight:500;">${t.name}</div>
-          <div style="font-size:0.75rem;color:#9ca3af;">Day ${t.dayOfMonth} of each month</div>
-        </div>
-        <div style="text-align:right;">
-          <div style="font-weight:700;">€${t.amount.toFixed(2)}</div>
-          <button onclick="deleteTemplate(${t.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:0.8rem;">Delete</button>
-        </div>
-      </div>
-    `).join('');
-  }
-
-  function generateForecast() {
-    const now = new Date();
-    const forecast = {};
-
-    // Initialize past 6 months
-    for (let m = -5; m <= 0; m++) {
-      const d = new Date(now.getFullYear(), now.getMonth() + m, 1);
-      const key = d.toISOString().split('T')[0].substring(0, 7);
-      forecast[key] = { income: 0, expenses: 0, bills: 0, balance: 0 };
-    }
-
-    // Aggregate actual income by month
-    income.forEach(i => {
-      const d = new Date(i.date + 'T00:00:00');
-      const key = d.toISOString().split('T')[0].substring(0, 7);
-      if (forecast[key]) {
-        forecast[key].income += i.amount || 0;
-      }
-    });
-
-    // Aggregate actual expenses by month
-    txns.forEach(t => {
-      const d = new Date(t.date + 'T00:00:00');
-      const key = d.toISOString().split('T')[0].substring(0, 7);
-      if (forecast[key]) {
-        forecast[key].expenses += t.amount || 0;
-      }
-    });
-
-    // Aggregate actual bills by month
-    bills.forEach(b => {
-      if (b.paid) {
-        const d = new Date(b.date + 'T00:00:00');
-        const key = d.toISOString().split('T')[0].substring(0, 7);
-        if (forecast[key]) {
-          forecast[key].bills += b.amount || 0;
-        }
-      }
-    });
-
-    // Calculate balance for each month
-    for (const key in forecast) {
-      forecast[key].balance = forecast[key].income - forecast[key].expenses;
-    }
-
-    return forecast;
-  }
-
-  function renderForecast() {
-    const forecast = generateForecast();
-    const months = Object.keys(forecast).sort();
-
-    const container = document.getElementById('forecast-table');
-
-    let html = `
-      <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
-        <thead>
-          <tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb;">
-            <th style="padding:12px;text-align:left;">Month</th>
-            <th style="padding:12px;text-align:right;">Income</th>
-            <th style="padding:12px;text-align:right;">Expenses</th>
-            <th style="padding:12px;text-align:right;">Bills</th>
-            <th style="padding:12px;text-align:right;">Net</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
-
-    months.forEach(month => {
-      const data = forecast[month];
-      const [year, monthNum] = month.split('-');
-      const monthName = new Date(year, monthNum - 1).toLocaleDateString('en-IE', { month: 'short', year: '2-digit' });
-
-      const netColor = data.balance >= 0 ? '#2ecc71' : '#ef4444';
-
-      html += `
-        <tr style="border-bottom:1px solid #f3f4f6;">
-          <td style="padding:12px;font-weight:500;">${monthName}</td>
-          <td style="padding:12px;text-align:right;color:#2ecc71;font-weight:600;">€${data.income.toFixed(0)}</td>
-          <td style="padding:12px;text-align:right;color:#ef4444;">€${data.expenses.toFixed(0)}</td>
-          <td style="padding:12px;text-align:right;color:#f59e0b;">€${data.bills.toFixed(0)}</td>
-          <td style="padding:12px;text-align:right;color:${netColor};font-weight:700;">€${data.balance.toFixed(0)}</td>
-        </tr>
-      `;
-    });
-
-    html += '</tbody></table>';
-    container.innerHTML = html;
+    renderForecast();
   }
 
   function renderDashboard() {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    let monthSpend = 0, monthIncome = 0;
+    let monthSpend = 0, monthIncome = 0, billsDue = 0;
+
     txns.forEach(t => {
       const d = new Date(t.date + 'T00:00:00');
       if (d >= startOfMonth) monthSpend += t.amount || 0;
     });
+
     income.forEach(i => {
       const d = new Date(i.date + 'T00:00:00');
       if (d >= startOfMonth) monthIncome += i.amount || 0;
     });
 
-    const savings = monthIncome - monthSpend;
+    const next7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    bills.forEach(b => {
+      const d = new Date(b.date + 'T00:00:00');
+      if (d >= now && d <= next7 && !b.paid) billsDue += b.amount || 0;
+    });
+
     const netWorth = income.reduce((s, i) => s + (i.amount || 0), 0) - txns.reduce((s, t) => s + (t.amount || 0), 0);
 
     document.getElementById('month-spend').textContent = '€' + monthSpend.toFixed(0);
     document.getElementById('month-income').textContent = '€' + monthIncome.toFixed(0);
     document.getElementById('net-worth').textContent = '€' + netWorth.toFixed(0);
-    document.getElementById('nw-income').textContent = '€' + monthIncome.toFixed(0);
-    document.getElementById('nw-spending').textContent = '€' + monthSpend.toFixed(0);
-    document.getElementById('nw-savings').textContent = '€' + Math.max(savings, 0).toFixed(0);
-
+    document.getElementById('bills-due').textContent = '€' + billsDue.toFixed(0);
     document.getElementById('stat-txns').textContent = txns.length;
     document.getElementById('stat-income').textContent = income.length;
     document.getElementById('stat-bills').textContent = bills.length;
@@ -474,65 +549,25 @@
   }
 
   function renderAlerts() {
-    const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
-
-    let weekSpend = 0;
-    txns.forEach(t => {
-      const d = new Date(t.date + 'T00:00:00');
-      if (d >= startOfWeek) weekSpend += t.amount || 0;
-    });
-
     const container = document.getElementById('alerts-section');
     let html = '';
 
-    if (weeklyBudget > 0) {
-      const pct = (weekSpend / weeklyBudget) * 100;
-      if (pct > alertThreshold) {
-        const status = pct > 100 ? 'danger' : 'warn';
-        html += `
-          <div class="alert-box ${status}">
-            <strong>⚠️ Spending Alert</strong>
-            <div style="font-size:0.9rem;margin-top:4px;">You've spent €${weekSpend.toFixed(0)} of €${weeklyBudget} (${pct.toFixed(0)}%)</div>
-          </div>
-        `;
-      }
-    }
-
-    // Overdue bills alert
+    const now = new Date();
     const overdue = bills.filter(b => {
       const d = new Date(b.date + 'T00:00:00');
       return d < now && !b.paid;
     });
+
     if (overdue.length > 0) {
-      html += `<div class="alert-box danger"><strong>🚨 Overdue Bills</strong><div style="font-size:0.9rem;margin-top:4px;">${overdue.length} bill${overdue.length !== 1 ? 's' : ''} overdue</div></div>`;
+      html += `<div class="alert danger">🚨 ${overdue.length} bill${overdue.length !== 1 ? 's' : ''} overdue</div>`;
     }
 
-    // Low income alert
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthIncome = income.filter(i => {
-      const d = new Date(i.date + 'T00:00:00');
-      return d >= startOfMonth;
-    }).reduce((s, i) => s + (i.amount || 0), 0);
-
-    const monthSpend = txns.filter(t => {
-      const d = new Date(t.date + 'T00:00:00');
-      return d >= startOfMonth;
-    }).reduce((s, t) => s + (t.amount || 0), 0);
-
-    if (monthIncome > 0 && monthSpend > monthIncome * 0.9) {
-      html += `<div class="alert-box warn"><strong>💡 High Spending</strong><div style="font-size:0.9rem;margin-top:4px;">Spending is ${(monthSpend / monthIncome * 100).toFixed(0)}% of income</div></div>`;
-    }
-
-    container.innerHTML = html || '';
+    container.innerHTML = html;
   }
 
   function renderUpcomingBills() {
     const now = new Date();
-    const next7days = new Date(now);
-    next7days.setDate(now.getDate() + 7);
+    const next7days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
     const upcoming = bills.filter(b => {
       const d = new Date(b.date + 'T00:00:00');
@@ -541,19 +576,19 @@
 
     const container = document.getElementById('upcoming-bills');
     if (upcoming.length === 0) {
-      container.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem;text-align:center;padding:12px;">No bills due soon</div>';
+      container.innerHTML = '<div class="empty-state" style="padding:20px;"><p>No bills due soon</p></div>';
       return;
     }
 
     container.innerHTML = upcoming.map(b => `
       <div class="list-item">
         <div>
-          <div style="font-weight:500;">${b.name}</div>
-          <div style="font-size:0.75rem;color:#9ca3af;">${new Date(b.date + 'T00:00:00').toLocaleDateString('en-IE', { month: 'short', day: 'numeric' })}</div>
+          <div class="list-item-title">${b.name}</div>
+          <div class="list-item-meta">${new Date(b.date + 'T00:00:00').toLocaleDateString('en-IE', { month: 'short', day: 'numeric' })}</div>
         </div>
         <div style="text-align:right;">
-          <div style="font-weight:700;">€${b.amount.toFixed(2)}</div>
-          <button onclick="markBillPaid('${b.id}')" style="background:none;border:none;color:#667eea;font-size:0.8rem;cursor:pointer;">Paid</button>
+          <div class="list-item-amount">€${b.amount.toFixed(2)}</div>
+          <button onclick="markBillPaid('${b.id}')" style="background:none;border:none;color:#667eea;font-size:0.8rem;cursor:pointer;margin-top:4px;">Mark Paid</button>
         </div>
       </div>
     `).join('');
@@ -576,16 +611,16 @@
   function renderIncome() {
     const container = document.getElementById('income-list');
     if (income.length === 0) {
-      container.innerHTML = '<div style="color:#9ca3af;text-align:center;padding:20px;">No income entries</div>';
+      container.innerHTML = '<div class="empty-state"><div class="icon">💰</div><p>No income entries yet</p></div>';
       return;
     }
     container.innerHTML = income.sort((a, b) => new Date(b.date) - new Date(a.date)).map(i => `
       <div class="list-item">
         <div>
-          <div style="font-weight:500;">${i.source}</div>
-          <div style="font-size:0.75rem;color:#9ca3af;">${new Date(i.date + 'T00:00:00').toLocaleDateString('en-IE')}</div>
+          <div class="list-item-title">${i.source}</div>
+          <div class="list-item-meta">${new Date(i.date + 'T00:00:00').toLocaleDateString('en-IE', { month: 'short', day: 'numeric' })}</div>
         </div>
-        <div style="font-weight:700;">€${i.amount.toFixed(2)}</div>
+        <div class="list-item-amount">+€${i.amount.toFixed(2)}</div>
       </div>
     `).join('');
   }
@@ -596,17 +631,17 @@
 
     const container = document.getElementById('txn-list');
     if (filtered.length === 0) {
-      container.innerHTML = '<div style="color:#9ca3af;text-align:center;padding:20px;">No transactions</div>';
+      container.innerHTML = '<div class="empty-state"><div class="icon">🎯</div><p>No transactions</p></div>';
       return;
     }
 
     container.innerHTML = filtered.map(t => `
       <div class="list-item">
         <div style="flex:1;">
-          <div style="font-weight:500;">${t.desc || 'Transaction'}</div>
-          <div style="font-size:0.75rem;color:#9ca3af;">${t.cat} • ${new Date(t.date + 'T00:00:00').toLocaleDateString('en-IE', { month: 'short', day: 'numeric' })}</div>
+          <div class="list-item-title">${t.desc || 'Transaction'}</div>
+          <div class="list-item-meta">${t.cat} • ${new Date(t.date + 'T00:00:00').toLocaleDateString('en-IE', { month: 'short', day: 'numeric' })}</div>
         </div>
-        <div style="font-weight:700;color:#ef4444;">-€${(t.amount || 0).toFixed(2)}</div>
+        <div class="list-item-amount negative">-€${(t.amount || 0).toFixed(2)}</div>
       </div>
     `).join('');
   }
@@ -631,63 +666,72 @@
     if (bill) bill.paid = true;
     save();
     render();
-    toast('Bill marked paid!');
   }
 
   function renderBills() {
     const container = document.getElementById('bills-list');
     if (bills.length === 0) {
-      container.innerHTML = '<div style="color:#9ca3af;text-align:center;padding:20px;">No bills</div>';
+      container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>No bills</p></div>';
       return;
     }
     container.innerHTML = bills.sort((a, b) => new Date(a.date) - new Date(b.date)).map(b => `
       <div class="list-item" style="opacity:${b.paid ? 0.5 : 1};">
         <div>
-          <div style="font-weight:500;${b.paid ? 'text-decoration:line-through;' : ''}">${b.name}</div>
-          <div style="font-size:0.75rem;color:#9ca3af;">${new Date(b.date + 'T00:00:00').toLocaleDateString('en-IE')} • ${b.frequency}</div>
+          <div class="list-item-title" style="${b.paid ? 'text-decoration:line-through;' : ''}">${b.name}</div>
+          <div class="list-item-meta">${new Date(b.date + 'T00:00:00').toLocaleDateString('en-IE')} • ${b.frequency}</div>
         </div>
-        <div>
-          <div style="font-weight:700;">€${b.amount.toFixed(2)}</div>
-          ${!b.paid ? `<button onclick="markBillPaid('${b.id}')" style="background:none;border:none;color:#667eea;font-size:0.8rem;cursor:pointer;">Mark Paid</button>` : '<span style="color:#9ca3af;font-size:0.8rem;">✓ Paid</span>'}
+        <div style="text-align:right;">
+          ${!b.paid ? `<button onclick="markBillPaid('${b.id}')" style="background:none;border:none;color:#667eea;font-size:0.8rem;cursor:pointer;">Mark Paid</button>` : '<span style="color:#8fa3b8;font-size:0.8rem;">✓ Paid</span>'}
         </div>
       </div>
     `).join('');
   }
 
-  function renderBudgets() {
-    const cats = ['Food', 'Transport', 'Shopping', 'Entertainment', 'Health', 'Bills', 'Education'];
-    document.getElementById('cat-budgets').innerHTML = cats.map(cat => `
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
-        <span style="min-width:30px;">${ICONS[cat]}</span>
-        <input type="number" id="cat-budget-${cat}" placeholder="€0" min="0" value="${catBudgets[cat] || ''}" style="flex:1;padding:8px;border:1px solid #d1d5db;border-radius:6px;" />
-      </div>
-    `).join('');
+  function generateForecast() {
+    const now = new Date();
+    const forecast = {};
 
-    if (weeklyBudget) document.getElementById('weekly-budget').value = weeklyBudget;
-    if (alertThreshold) document.getElementById('alert-threshold').value = alertThreshold;
-  }
+    for (let m = -5; m <= 0; m++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + m, 1);
+      const key = d.toISOString().split('T')[0].substring(0, 7);
+      forecast[key] = { income: 0, expenses: 0 };
+    }
 
-  function saveWeeklyBudget() {
-    weeklyBudget = parseFloat(document.getElementById('weekly-budget').value) || 0;
-    localStorage.setItem('weeklyBudget', weeklyBudget);
-    render();
-    toast('Saved!');
-  }
-
-  function saveCategoryBudgets() {
-    ['Food', 'Transport', 'Shopping', 'Entertainment', 'Health', 'Bills', 'Education'].forEach(cat => {
-      catBudgets[cat] = parseFloat(document.getElementById(`cat-budget-${cat}`).value) || 0;
+    income.forEach(i => {
+      const d = new Date(i.date + 'T00:00:00');
+      const key = d.toISOString().split('T')[0].substring(0, 7);
+      if (forecast[key]) forecast[key].income += i.amount || 0;
     });
-    localStorage.setItem('catBudgets', JSON.stringify(catBudgets));
-    render();
-    toast('Saved!');
+
+    txns.forEach(t => {
+      const d = new Date(t.date + 'T00:00:00');
+      const key = d.toISOString().split('T')[0].substring(0, 7);
+      if (forecast[key]) forecast[key].expenses += t.amount || 0;
+    });
+
+    return forecast;
   }
 
-  function saveAlertThreshold() {
-    alertThreshold = parseFloat(document.getElementById('alert-threshold').value) || 75;
-    localStorage.setItem('alertThreshold', alertThreshold);
-    render();
-    toast('Saved!');
+  function renderForecast() {
+    const forecast = generateForecast();
+    const months = Object.keys(forecast).sort();
+
+    const container = document.getElementById('forecast-table');
+
+    let html = `<table style="width:100%;border-collapse:collapse;font-size:0.95rem;"><thead><tr style="background:#f8faff;"><th style="padding:16px;text-align:left;">Month</th><th style="padding:16px;text-align:right;">Income</th><th style="padding:16px;text-align:right;">Spending</th><th style="padding:16px;text-align:right;">Net</th></tr></thead><tbody>`;
+
+    months.forEach(month => {
+      const data = forecast[month];
+      const [year, monthNum] = month.split('-');
+      const monthName = new Date(year, monthNum - 1).toLocaleDateString('en-IE', { month: 'long', year: 'numeric' });
+      const net = data.income - data.expenses;
+      const netColor = net >= 0 ? '#2ecc71' : '#ef4444';
+
+      html += `<tr style="border-bottom:1px solid #e8eef5;"><td style="padding:16px;font-weight:500;">${monthName}</td><td style="padding:16px;text-align:right;color:#2ecc71;font-weight:600;">€${data.income.toFixed(0)}</td><td style="padding:16px;text-align:right;color:#ef4444;">€${data.expenses.toFixed(0)}</td><td style="padding:16px;text-align:right;color:${netColor};font-weight:700;">€${net.toFixed(0)}</td></tr>`;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
   }
 
   function handleDragOver(e) { e.preventDefault(); }
@@ -743,10 +787,7 @@
     toast('Exported!');
   }
 
-  function clearAllData() {
-    if (confirm('Delete all data?')) { txns = []; income = []; bills = []; save(); render(); toast('Cleared!'); }
-  }
-
+  function clearAllData() { if (confirm('Delete all data?')) { txns = []; income = []; bills = []; save(); render(); toast('Cleared!'); } }
   function loadSampleData() {
     if ((txns.length + income.length) > 0 && !confirm('Replace data?')) return;
     txns = [];
@@ -768,14 +809,13 @@
 
     save();
     render();
-    toast('Sample data loaded!');
+    toast('Sample loaded!');
   }
 
   function save() {
     localStorage.setItem('txns', JSON.stringify(txns));
     localStorage.setItem('income', JSON.stringify(income));
     localStorage.setItem('bills', JSON.stringify(bills));
-    localStorage.setItem('recurringTemplates', JSON.stringify(recurringTemplates));
   }
 
   function toast(msg) {
