@@ -351,28 +351,14 @@ function clearAllData() {
   }
 }
 
-const PLAID_CLIENT_ID = '69fb424d74a76c000dbf0301';
-const PLAID_ENV = 'production'; // Live Irish bank integration
-
+const BACKEND_URL = 'http://localhost:3001'; // Change to your deployed backend URL
 let plaidHandler = null;
 
 function initPlaidLink() {
-  if (PLAID_CLIENT_ID === 'YOUR_PLAID_CLIENT_ID') {
-    console.log('⚠️ Plaid Client ID not configured. Using demo mode.');
-    return;
-  }
-
-  fetch(`https://${PLAID_ENV}.plaid.com/link/token/create`, {
+  fetch(`${BACKEND_URL}/api/plaid/create-link-token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      user: { client_user_id: 'user-' + Date.now() },
-      client_name: 'Noel Budget Tracker',
-      language: 'en',
-      products: ['auth', 'transactions'],
-      country_codes: ['IE', 'GB', 'EU'],
-      institutions: [],
-    })
+    body: JSON.stringify({})
   })
   .then(res => res.json())
   .then(data => {
@@ -380,33 +366,70 @@ function initPlaidLink() {
       plaidHandler = Plaid.create({
         token: data.link_token,
         onSuccess: (publicToken) => {
-          console.log('✅ Bank connected:', publicToken);
+          console.log('✅ Bank connected');
           exchangeToken(publicToken);
         },
         onExit: (err) => {
           if (err) console.log('User exited Plaid:', err);
         }
       });
+    } else {
+      console.log('⚠️ Backend not running. Using demo mode.');
     }
   })
-  .catch(err => console.log('Plaid init error (demo mode):', err));
+  .catch(err => {
+    console.log('Backend error (demo mode):', err);
+  });
 }
 
 function openPlaidLink() {
   if (plaidHandler) {
     plaidHandler.open();
   } else {
-    // Demo mode if no Plaid credentials
-    alert('🏦 Demo Mode\n\nPlaid not configured. Click OK for simulated bank sync.\n\nTo enable real connections, add your Plaid Client ID.');
+    alert('🏦 Demo Mode\n\nBackend not connected. Click OK for simulated bank sync.');
     simulateBankSync();
   }
 }
 
 function exchangeToken(publicToken) {
-  // In production, send publicToken to your backend to exchange for access_token
-  console.log('Public token received:', publicToken);
-  alert('✅ Bank connected! In production, this token would be exchanged for live transaction access.');
-  simulateBankSync();
+  fetch(`${BACKEND_URL}/api/plaid/exchange-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ public_token: publicToken })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.access_token) {
+      console.log('✅ Bank connected! Fetching transactions...');
+      fetchBankTransactions(data.item_id);
+    }
+  })
+  .catch(err => {
+    console.error('Exchange error:', err);
+    alert('Error connecting bank. Using demo data.');
+    simulateBankSync();
+  });
+}
+
+function fetchBankTransactions(itemId) {
+  fetch(`${BACKEND_URL}/api/plaid/transactions/${itemId}`)
+  .then(res => res.json())
+  .then(data => {
+    if (data.transactions) {
+      data.transactions.forEach((t, i) => {
+        if (!txns.find(x => x.desc === t.desc && x.date === t.date)) {
+          txns.push({ ...t, id: Date.now() + i });
+        }
+      });
+      save();
+      render();
+      alert(`✅ Imported ${data.transactions.length} transactions!`);
+    }
+  })
+  .catch(err => {
+    console.error('Fetch transactions error:', err);
+    alert('Could not fetch transactions. Make sure backend is running.');
+  });
 }
 
 function simulateBankSync() {
