@@ -65,6 +65,7 @@
 
 <nav>
   <button class="active" onclick="switchTab('dashboard')">💰 Dashboard</button>
+  <button onclick="switchTab('forecast')">📈 Forecast</button>
   <button onclick="switchTab('income')">💵 Income</button>
   <button onclick="switchTab('spending')">📊 Spending</button>
   <button onclick="switchTab('bills')">📋 Bills</button>
@@ -74,6 +75,34 @@
 </nav>
 
 <div class="container">
+
+  <!-- Forecast -->
+  <div id="forecast" class="section">
+    <div class="card">
+      <h2>📈 6-Month Cash Flow Forecast</h2>
+      <p style="font-size:0.85rem;color:#6b7280;margin-bottom:16px;">Projected income, bills & balance for next 6 months</p>
+      <div id="forecast-table" style="overflow-x:auto;"></div>
+    </div>
+
+    <div class="card">
+      <h2>🔄 Recurring Bills Setup</h2>
+      <p style="font-size:0.85rem;color:#6b7280;margin-bottom:12px;">These bills will be projected forward 6 months</p>
+      <div class="form-group">
+        <label>Add Recurring Bill Template</label>
+        <input type="text" id="template-name" placeholder="e.g. ESB, Mortgage, Rent" />
+      </div>
+      <div class="form-group">
+        <label>Monthly Amount (€)</label>
+        <input type="number" id="template-amount" placeholder="0.00" min="0.01" />
+      </div>
+      <div class="form-group">
+        <label>Day of Month (1-31)</label>
+        <input type="number" id="template-day" placeholder="1" min="1" max="31" />
+      </div>
+      <button class="btn" onclick="addRecurringTemplate()">Add Template</button>
+      <div id="templates-list" style="margin-top:16px;"></div>
+    </div>
+  </div>
 
   <!-- Dashboard -->
   <div id="dashboard" class="section active">
@@ -257,6 +286,7 @@
   let txns = JSON.parse(localStorage.getItem('txns') || '[]');
   let income = JSON.parse(localStorage.getItem('income') || '[]');
   let bills = JSON.parse(localStorage.getItem('bills') || '[]');
+  let recurringTemplates = JSON.parse(localStorage.getItem('recurringTemplates') || '[]');
   let weeklyBudget = parseFloat(localStorage.getItem('weeklyBudget') || '0');
   let catBudgets = JSON.parse(localStorage.getItem('catBudgets') || '{}');
   let alertThreshold = parseFloat(localStorage.getItem('alertThreshold') || '75');
@@ -273,10 +303,140 @@
 
   function render() {
     renderDashboard();
+    renderForecast();
     renderIncome();
     renderSpending();
     renderBills();
     renderBudgets();
+    renderRecurringTemplates();
+  }
+
+  function addRecurringTemplate() {
+    const name = document.getElementById('template-name').value.trim();
+    const amt = parseFloat(document.getElementById('template-amount').value);
+    const day = parseInt(document.getElementById('template-day').value) || 1;
+    if (!name || !amt) { toast('Fill all fields'); return; }
+    recurringTemplates.push({ id: Date.now(), name, amount: amt, dayOfMonth: day });
+    localStorage.setItem('recurringTemplates', JSON.stringify(recurringTemplates));
+    document.getElementById('template-name').value = '';
+    document.getElementById('template-amount').value = '';
+    document.getElementById('template-day').value = '';
+    render();
+    toast('Template added!');
+  }
+
+  function deleteTemplate(id) {
+    recurringTemplates = recurringTemplates.filter(t => t.id !== id);
+    localStorage.setItem('recurringTemplates', JSON.stringify(recurringTemplates));
+    render();
+  }
+
+  function renderRecurringTemplates() {
+    const container = document.getElementById('templates-list');
+    if (recurringTemplates.length === 0) {
+      container.innerHTML = '<div style="color:#9ca3af;font-size:0.9rem;text-align:center;padding:12px;">No templates yet</div>';
+      return;
+    }
+    container.innerHTML = recurringTemplates.map(t => `
+      <div class="list-item">
+        <div>
+          <div style="font-weight:500;">${t.name}</div>
+          <div style="font-size:0.75rem;color:#9ca3af;">Day ${t.dayOfMonth} of each month</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-weight:700;">€${t.amount.toFixed(2)}</div>
+          <button onclick="deleteTemplate(${t.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:0.8rem;">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function generateForecast() {
+    const now = new Date();
+    const forecast = {};
+
+    // Initialize 6 months
+    for (let m = 0; m < 6; m++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + m, 1);
+      const key = d.toISOString().split('T')[0].substring(0, 7);
+      forecast[key] = { income: 0, expenses: 0, bills: 0, balance: 0 };
+    }
+
+    // Add projected recurring bills
+    for (let m = 0; m < 6; m++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + m, 1);
+      const key = d.toISOString().split('T')[0].substring(0, 7);
+
+      recurringTemplates.forEach(t => {
+        const billDate = new Date(now.getFullYear(), now.getMonth() + m, Math.min(t.dayOfMonth, 28));
+        const billKey = billDate.toISOString().split('T')[0].substring(0, 7);
+        if (forecast[billKey]) {
+          forecast[billKey].bills += t.amount;
+          forecast[billKey].expenses += t.amount;
+        }
+      });
+    }
+
+    // Add projected income (average)
+    const monthlyIncomeAvg = income.length > 0
+      ? income.reduce((s, i) => s + (i.amount || 0), 0) / Math.max(income.length, 1)
+      : 0;
+
+    for (const key in forecast) {
+      forecast[key].income = monthlyIncomeAvg;
+      forecast[key].balance = forecast[key].income - forecast[key].expenses;
+    }
+
+    return forecast;
+  }
+
+  function renderForecast() {
+    const forecast = generateForecast();
+    const months = Object.keys(forecast).sort();
+
+    const container = document.getElementById('forecast-table');
+
+    let runningBalance = 0;
+    const currentBalance = income.reduce((s, i) => s + (i.amount || 0), 0) - txns.reduce((s, t) => s + (t.amount || 0), 0);
+
+    let html = `
+      <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+        <thead>
+          <tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb;">
+            <th style="padding:12px;text-align:left;">Month</th>
+            <th style="padding:12px;text-align:right;">Income</th>
+            <th style="padding:12px;text-align:right;">Bills</th>
+            <th style="padding:12px;text-align:right;">Net</th>
+            <th style="padding:12px;text-align:right;">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    runningBalance = currentBalance;
+
+    months.forEach(month => {
+      const data = forecast[month];
+      runningBalance += data.balance;
+      const [year, monthNum] = month.split('-');
+      const monthName = new Date(year, monthNum - 1).toLocaleDateString('en-IE', { month: 'short', year: '2-digit' });
+
+      const netColor = data.balance >= 0 ? '#2ecc71' : '#ef4444';
+      const balanceColor = runningBalance >= 0 ? '#667eea' : '#ef4444';
+
+      html += `
+        <tr style="border-bottom:1px solid #f3f4f6;">
+          <td style="padding:12px;font-weight:500;">${monthName}</td>
+          <td style="padding:12px;text-align:right;">€${data.income.toFixed(0)}</td>
+          <td style="padding:12px;text-align:right;color:#ef4444;">-€${data.bills.toFixed(0)}</td>
+          <td style="padding:12px;text-align:right;color:${netColor};font-weight:600;">€${data.balance.toFixed(0)}</td>
+          <td style="padding:12px;text-align:right;color:${balanceColor};font-weight:700;">€${runningBalance.toFixed(0)}</td>
+        </tr>
+      `;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
   }
 
   function renderDashboard() {
@@ -613,6 +773,7 @@
     localStorage.setItem('txns', JSON.stringify(txns));
     localStorage.setItem('income', JSON.stringify(income));
     localStorage.setItem('bills', JSON.stringify(bills));
+    localStorage.setItem('recurringTemplates', JSON.stringify(recurringTemplates));
   }
 
   function toast(msg) {
