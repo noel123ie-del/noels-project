@@ -126,6 +126,18 @@
     .cat-bar-fill { height: 100%; background: #667eea; }
     .cat-amt { font-weight: 600; font-size: 0.85rem; min-width: 60px; text-align: right; }
 
+    /* Trends chart */
+    .trend-chart { margin-top: 16px; }
+    .trend-week { display: flex; align-items: flex-end; gap: 8px; height: 100px; }
+    .trend-bar { flex: 1; background: #667eea; border-radius: 4px 4px 0 0; position: relative; min-height: 4px; }
+    .trend-bar-label { font-size: 0.7rem; color: #9ca3af; text-align: center; margin-top: 4px; }
+
+    /* Account selector */
+    .account-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .account-btn { padding: 8px 14px; border: 1px solid #d1d5db; background: #f9fafb; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500; transition: all 0.2s; }
+    .account-btn.active { background: #667eea; color: white; border-color: #667eea; }
+    .account-btn:hover { border-color: #667eea; }
+
     /* Upload area */
     .upload-area {
       border: 2px dashed #d1d5db;
@@ -229,7 +241,37 @@
 
       <div class="panel" style="margin-top:16px;">
         <h2>📊 Spending by Category</h2>
+        <div class="account-tabs" id="account-tabs"></div>
         <div class="category-chart" id="cat-chart"></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <h2>📈 5-Week Trend</h2>
+        <div class="trend-chart" id="trend-chart"></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <h2>🎯 Rules</h2>
+        <div class="form-group">
+          <label>Add Categorization Rule</label>
+          <input type="text" id="rule-keyword" placeholder="e.g. Tesco" />
+          <select id="rule-category" style="margin-top:8px;">
+            <option value="Food">🍔 Food</option>
+            <option value="Transport">🚗 Transport</option>
+            <option value="Shopping">🛍️ Shopping</option>
+            <option value="Entertainment">🎬 Entertainment</option>
+            <option value="Health">💊 Health</option>
+            <option value="Bills">🧾 Bills</option>
+            <option value="Education">📚 Education</option>
+            <option value="Other">📦 Other</option>
+          </select>
+        </div>
+        <button class="btn" onclick="addRule()" style="margin-top:8px;">Add Rule</button>
+        <div id="rules-list" style="margin-top:16px;"></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <button class="btn" onclick="loadSampleData()" style="background:#2ecc71;">📊 Load Sample Data</button>
       </div>
     </div>
 
@@ -320,6 +362,9 @@
 
   let txns = JSON.parse(localStorage.getItem('txns') || '[]');
   let budget = parseFloat(localStorage.getItem('budget') || '0');
+  let accounts = JSON.parse(localStorage.getItem('accounts') || '["All"]');
+  let currentAccount = localStorage.getItem('currentAccount') || 'All';
+  let rules = JSON.parse(localStorage.getItem('rules') || '{}');
 
   document.getElementById('header-date').textContent = new Date().toLocaleDateString('en-IE', { weekday: 'short', month: 'short', day: 'numeric' });
   if (budget) document.getElementById('budget-monthly').value = budget;
@@ -427,7 +472,8 @@
           date: dateStr,
           amount: amt,
           desc: desc.substring(0, 40),
-          cat: autoCat(desc),
+          cat: applyRules(desc),
+          account: 'All',
           recurring: isRecurring(desc),
         });
         added++;
@@ -513,6 +559,7 @@
       amount: amt,
       desc: desc.substring(0, 40),
       cat: cat,
+      account: 'All',
       recurring: isRecurring(desc),
     });
 
@@ -586,10 +633,154 @@
     document.getElementById('weekly-modal').style.display = 'none';
   }
 
+  function renderAccountTabs() {
+    const tabs = document.getElementById('account-tabs');
+    tabs.innerHTML = accounts.map(acc => `
+      <button class="account-btn${acc === currentAccount ? ' active' : ''}" onclick="switchAccount('${acc}')">${acc}</button>
+    `).join('');
+  }
+
+  function switchAccount(acc) {
+    currentAccount = acc;
+    localStorage.setItem('currentAccount', acc);
+    renderAccountTabs();
+    render();
+  }
+
+  function getFilteredTxns() {
+    if (currentAccount === 'All') return txns;
+    return txns.filter(t => (t.account || 'All') === currentAccount);
+  }
+
+  function renderTrends() {
+    const weeks = [];
+    for (let i = 4; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i * 7);
+      const startOfWeek = new Date(d);
+      startOfWeek.setDate(d.getDate() - d.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+      let total = 0;
+      getFilteredTxns().forEach(t => {
+        const td = new Date(t.date + 'T00:00:00');
+        if (td >= startOfWeek && td <= endOfWeek) total += t.amount;
+      });
+
+      weeks.push({ label: (startOfWeek.getMonth() + 1) + '/' + startOfWeek.getDate(), total });
+    }
+
+    const maxTotal = Math.max(...weeks.map(w => w.total), 1);
+    const container = document.getElementById('trend-chart');
+    container.innerHTML = `
+      <div class="trend-week">
+        ${weeks.map(w => `
+          <div style="flex:1;">
+            <div class="trend-bar" style="height:${(w.total / maxTotal) * 100}px;" title="€${w.total.toFixed(0)}"></div>
+            <div class="trend-bar-label">${w.label}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function addRule() {
+    const keyword = document.getElementById('rule-keyword').value.trim();
+    const category = document.getElementById('rule-category').value;
+    if (!keyword) { toast('Enter keyword'); return; }
+    rules[keyword.toLowerCase()] = category;
+    localStorage.setItem('rules', JSON.stringify(rules));
+    document.getElementById('rule-keyword').value = '';
+    renderRules();
+    toast('Rule added!');
+  }
+
+  function deleteRule(keyword) {
+    delete rules[keyword];
+    localStorage.setItem('rules', JSON.stringify(rules));
+    renderRules();
+  }
+
+  function renderRules() {
+    const list = document.getElementById('rules-list');
+    const rulesList = Object.entries(rules);
+    if (rulesList.length === 0) {
+      list.innerHTML = '<div style="font-size:0.85rem;color:#9ca3af;text-align:center;padding:12px;">No rules yet</div>';
+      return;
+    }
+    list.innerHTML = rulesList.map(([kw, cat]) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:#f9fafb;border-radius:6px;margin-bottom:8px;font-size:0.85rem;">
+        <div><strong>${kw}</strong> → ${cat}</div>
+        <button onclick="deleteRule('${kw}')" style="background:none;border:none;color:#e74c3c;cursor:pointer;">✕</button>
+      </div>
+    `).join('');
+  }
+
+  function applyRules(desc) {
+    const d = desc.toLowerCase();
+    for (const [kw, cat] of Object.entries(rules)) {
+      if (d.includes(kw)) return cat;
+    }
+    return autoCat(desc);
+  }
+
+  function loadSampleData() {
+    if (txns.length > 0 && !confirm('Replace existing data with sample?')) return;
+
+    const now = new Date();
+    const sampleTxns = [];
+
+    const categories = ['Food', 'Transport', 'Shopping', 'Entertainment', 'Health', 'Bills', 'Education'];
+    const merchants = {
+      Food: ['Tesco', 'Sainsbury', 'Dunnes', 'Lidl', 'Coffee Shop', 'Restaurant'],
+      Transport: ['Fuel', 'Uber', 'Bus', 'Parking', 'Taxi'],
+      Shopping: ['Amazon', 'Zara', 'Boots', 'Argos'],
+      Entertainment: ['Netflix', 'Spotify', 'Cinema', 'Pub'],
+      Health: ['Pharmacy', 'Doctor', 'Gym', 'Dentist'],
+      Bills: ['Electric', 'Water', 'Internet', 'Phone'],
+      Education: ['Course', 'Book', 'Tuition'],
+    };
+
+    for (let week = 0; week < 6; week++) {
+      for (let day = 0; day < 7; day++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - (week * 7 + day));
+        const dateStr = d.toISOString().split('T')[0];
+
+        const numTxns = Math.floor(Math.random() * 3) + 1;
+        for (let i = 0; i < numTxns; i++) {
+          const cat = categories[Math.floor(Math.random() * categories.length)];
+          const merchant = merchants[cat][Math.floor(Math.random() * merchants[cat].length)];
+          const amt = Math.random() * 50 + 5;
+
+          sampleTxns.push({
+            id: Date.now() + Math.random(),
+            date: dateStr,
+            amount: parseFloat(amt.toFixed(2)),
+            desc: merchant,
+            cat: cat,
+            account: 'All',
+            recurring: false,
+          });
+        }
+      }
+    }
+
+    txns = sampleTxns;
+    save();
+    render();
+    toast('Loaded 6 weeks of sample data!');
+  }
+
   function render() {
     renderDash();
     renderChart();
     renderTxns();
+    renderTrends();
+    renderAccountTabs();
+    renderRules();
   }
 
   function renderDash() {
@@ -599,7 +790,7 @@
     startOfWeek.setHours(0, 0, 0, 0);
 
     let monthTotal = 0, weekTotal = 0, allTotal = 0;
-    txns.forEach(t => {
+    getFilteredTxns().forEach(t => {
       const d = new Date(t.date + 'T00:00:00');
       allTotal += t.amount;
       if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) monthTotal += t.amount;
@@ -617,7 +808,7 @@
     const catTotals = {};
     let total = 0;
 
-    txns.forEach(t => {
+    getFilteredTxns().forEach(t => {
       const d = new Date(t.date + 'T00:00:00');
       if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
         catTotals[t.cat] = (catTotals[t.cat] || 0) + t.amount;
@@ -651,7 +842,7 @@
     const search = document.getElementById('search').value.toLowerCase();
     const cat = document.getElementById('filter-cat').value;
 
-    let filtered = txns.filter(t => {
+    let filtered = getFilteredTxns().filter(t => {
       if (cat && t.cat !== cat) return false;
       if (search && !t.desc.toLowerCase().includes(search)) return false;
       return true;
