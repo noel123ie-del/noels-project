@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Noel - Smart Spending Tracker</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.plaid.com/link/v3/stable/link-initialize.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -42,17 +41,6 @@
     .stat-card.balance { border-left: 4px solid #4caf50; }
     .stat-label { font-size: 0.85rem; color: #8892b0; text-transform: uppercase; margin-bottom: 8px; }
     .stat-value { font-size: 2rem; font-weight: 800; color: #fff; }
-    .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
-    .chart-box {
-      background: linear-gradient(135deg, #16213e, #0f3460);
-      border: 1px solid rgba(255,255,255,0.1);
-      padding: 24px;
-      border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-    }
-    .chart-box h3 { font-size: 1.1rem; margin-bottom: 16px; color: #fff; }
-    .chart-wrapper { position: relative; height: 300px; }
-    canvas { max-height: 300px !important; }
     .section { display: none; }
     .section.active { display: block; animation: fadeIn 0.3s; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -72,6 +60,20 @@
     .form-group input:focus, .form-group select:focus { outline: none; border-color: #00d4aa; box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.1); }
     .btn-primary { background: linear-gradient(135deg, #00d4aa, #00a881); color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; cursor: pointer; }
     .btn-primary:hover { opacity: 0.9; }
+    .category-budget-card {
+      background: rgba(0, 212, 170, 0.05);
+      border: 1px solid rgba(0, 212, 170, 0.2);
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .category-budget-card.over { border-color: #ff6b9d; background: rgba(255, 107, 157, 0.05); }
+    .category-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .category-name { font-weight: 600; color: #fff; }
+    .category-spent { color: #ff6b9d; font-weight: 700; }
+    .progress-bar { width: 100%; background: #333; height: 8px; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+    .progress-fill { height: 100%; transition: width 0.3s; }
+    .category-info { display: flex; justify-content: space-between; font-size: 0.85rem; color: #8892b0; }
     .transaction-item {
       padding: 12px 16px;
       border-bottom: 1px solid rgba(255,255,255,0.05);
@@ -84,8 +86,16 @@
     .transaction-amount { font-weight: 800; color: #ff6b9d; }
     .delete-btn { background: none; border: none; color: #666; cursor: pointer; font-size: 1.2rem; }
     .delete-btn:hover { color: #ff6b9d; }
+    .chart-box {
+      background: linear-gradient(135deg, #16213e, #0f3460);
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 24px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }
+    .chart-box h3 { font-size: 1.1rem; margin-bottom: 16px; color: #fff; }
+    .chart-wrapper { position: relative; height: 300px; }
     @media (max-width: 768px) {
-      .dashboard-grid { grid-template-columns: 1fr; }
       .stats-row { grid-template-columns: 1fr; }
       .month-header { font-size: 1.5rem; }
     }
@@ -107,7 +117,7 @@
 
 <div class="container">
 
-  <!-- Dashboard Section -->
+  <!-- Dashboard -->
   <div id="dashboard" class="section active">
     <div class="month-header" id="monthHeader">September</div>
 
@@ -126,29 +136,16 @@
       </div>
     </div>
 
-    <div id="budgetSection" class="form-section" style="display: none; border-left: 4px solid #ffd700;">
-      <h3>⚠️ Budget Alert</h3>
-      <div id="budgetAlert"></div>
-    </div>
-
-    <div class="dashboard-grid">
-      <div class="chart-box">
-        <h3>📊 Spending by Category</h3>
-        <div class="chart-wrapper">
-          <canvas id="categoryChart"></canvas>
-        </div>
-      </div>
-      <div class="chart-box">
-        <h3>📈 6-Month Trend</h3>
-        <div class="chart-wrapper">
-          <canvas id="trendChart"></canvas>
-        </div>
-      </div>
-    </div>
-
     <div class="form-section">
-      <h3>📋 Budget vs Spending</h3>
-      <div id="budgetComparison" style="display: grid; gap: 16px;"></div>
+      <h3>📋 Category Spending vs Budget</h3>
+      <div id="categoryBudgetDisplay"></div>
+    </div>
+
+    <div class="chart-box">
+      <h3>📊 Spending by Category</h3>
+      <div class="chart-wrapper">
+        <canvas id="categoryChart"></canvas>
+      </div>
     </div>
 
     <div class="form-section">
@@ -159,7 +156,7 @@
     </div>
   </div>
 
-  <!-- Daily Log Section -->
+  <!-- Daily Log -->
   <div id="daily-log" class="section">
     <div class="form-section">
       <h3>➕ Quick Add Spending</h3>
@@ -175,24 +172,26 @@
         <div class="form-group">
           <label>Category</label>
           <select id="logCategory">
-            <option>Food</option>
-            <option>Transport</option>
-            <option>Shopping</option>
-            <option>Entertainment</option>
-            <option>Utilities</option>
-            <option>Other</option>
+            <option>Groceries</option>
+            <option>Fuel & Transport</option>
+            <option>Utilities & Bills</option>
+            <option>Subscriptions</option>
+            <option>Eating Out & Coffee</option>
+            <option>Kids & Family</option>
+            <option>Health & Fitness</option>
+            <option>Personal & Discretionary</option>
           </select>
         </div>
       </div>
       <div class="form-group">
         <label>Description</label>
-        <input type="text" id="logDesc" placeholder="e.g. Coffee at Starbucks">
+        <input type="text" id="logDesc" placeholder="e.g. Tesco Supermarket">
       </div>
       <button class="btn-primary" onclick="addDailyLog()" style="width: 100%; margin-top: 16px;">Log Spending</button>
     </div>
   </div>
 
-  <!-- Insights Section -->
+  <!-- Insights -->
   <div id="insights" class="section">
     <div class="form-section">
       <h3>💡 Smart Insights</h3>
@@ -213,31 +212,20 @@
     </div>
   </div>
 
-  <!-- Settings Section -->
+  <!-- Settings -->
   <div id="settings" class="section">
     <div class="form-section">
-      <h3>⚙️ Budget Settings</h3>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Weekly Budget (€)</label>
-          <input type="number" id="weeklyBudgetInput" placeholder="0.00" step="0.01">
-        </div>
-      </div>
-      <button class="btn-primary" onclick="saveBudgetSettings()" style="width: 100%; margin-top: 16px;">Save Settings</button>
+      <h3>⚙️ Category Budgets</h3>
+      <p style="color: #8892b0; margin-bottom: 16px; font-size: 0.9rem;">Set a monthly budget limit for each category</p>
+      <div id="categoryBudgetsForm"></div>
+      <button class="btn-primary" onclick="saveCategoryBudgets()" style="width: 100%; margin-top: 16px;">Save All Budgets</button>
     </div>
 
     <div class="form-section">
-      <h3>🏦 Connect Your Bank (Live Sync)</h3>
+      <h3>🏦 Connect Your Bank</h3>
       <p style="color: #8892b0; margin-bottom: 16px; font-size: 0.9rem;">Auto-sync transactions from AIB, Bank of Ireland, and more.</p>
       <button class="btn-primary" id="connectBankBtn" onclick="openPlaidLink()" style="width: 100%; margin-bottom: 12px;">🔗 Connect Bank Account</button>
       <div id="bankStatus" style="font-size: 0.9rem; color: #8892b0;"></div>
-    </div>
-
-    <div class="form-section">
-      <h3>📥 Import Bank Data</h3>
-      <p style="color: #8892b0; margin-bottom: 16px; font-size: 0.9rem;">Works with any bank. CSV format.</p>
-      <button class="btn-primary" onclick="document.getElementById('csvFile').click()" style="width: 100%;">Choose File</button>
-      <input type="file" id="csvFile" accept=".csv" onchange="importFile(event)" style="display: none;">
     </div>
 
     <div class="form-section">
@@ -252,22 +240,14 @@
 <script>
 let txns = JSON.parse(localStorage.getItem('txns') || '[]');
 let income = JSON.parse(localStorage.getItem('income') || '[]');
-let weeklyBudget = parseFloat(localStorage.getItem('weeklyBudget') || '0');
-let chartInstances = {};
+let catBudgets = JSON.parse(localStorage.getItem('catBudgets') || '{}');
 
-const categories = ['Food', 'Transport', 'Shopping', 'Entertainment', 'Utilities', 'Other'];
-const autoCategories = {
-  'Food': /supermarket|restaurant|cafe|coffee|pizza|burger|grocery|tesco|dunnes|lidl|aldi|costa|starbucks/i,
-  'Transport': /taxi|uber|bus|train|petrol|fuel|parking|transport|metro/i,
-  'Shopping': /amazon|shop|mall|store|sainsbury|next|h&m|zara|shopping/i,
-  'Entertainment': /cinema|movie|netflix|spotify|game|pub|bar|concert|sports/i,
-  'Utilities': /electricity|water|gas|broadband|phone|bill|esb|mortgage|rent|insurance/i,
-};
+const categories = ['Groceries', 'Fuel & Transport', 'Utilities & Bills', 'Subscriptions', 'Eating Out & Coffee', 'Kids & Family', 'Health & Fitness', 'Personal & Discretionary'];
 
 function save() {
   localStorage.setItem('txns', JSON.stringify(txns));
   localStorage.setItem('income', JSON.stringify(income));
-  localStorage.setItem('weeklyBudget', weeklyBudget);
+  localStorage.setItem('catBudgets', JSON.stringify(catBudgets));
 }
 
 function switchSection(event, sectionId) {
@@ -290,14 +270,18 @@ function addDailyLog() {
   save();
   document.getElementById('logAmount').value = '';
   document.getElementById('logDesc').value = '';
-  render();
   alert('✅ Spending logged!');
+  render();
 }
 
-function saveBudgetSettings() {
-  weeklyBudget = parseFloat(document.getElementById('weeklyBudgetInput').value) || 0;
+function saveCategoryBudgets() {
+  categories.forEach(cat => {
+    const input = document.getElementById(`budget-${cat}`);
+    if (input?.value) catBudgets[cat] = parseFloat(input.value);
+  });
   save();
-  alert('✅ Settings saved!');
+  alert('✅ Category budgets saved!');
+  render();
 }
 
 function deleteTxn(id) {
@@ -310,15 +294,15 @@ function deleteTxn(id) {
 
 function loadSampleData() {
   txns = [
-    { id: 1, date: '2026-05-05', amount: 45, category: 'Food', desc: 'Supermarket' },
-    { id: 2, date: '2026-05-04', amount: 15, category: 'Transport', desc: 'Bus fare' },
-    { id: 3, date: '2026-05-03', amount: 120, category: 'Shopping', desc: 'Clothing' },
-    { id: 4, date: '2026-05-02', amount: 8.5, category: 'Food', desc: 'Coffee' },
-    { id: 5, date: '2026-05-01', amount: 60, category: 'Entertainment', desc: 'Cinema' },
-    { id: 6, date: '2026-04-30', amount: 99, category: 'Utilities', desc: 'Internet' },
+    { id: 1, date: '2026-05-06', amount: 52.50, category: 'Groceries', desc: 'Tesco Supermarket' },
+    { id: 2, date: '2026-05-05', amount: 18.99, category: 'Fuel & Transport', desc: 'Taxi - Dublin' },
+    { id: 3, date: '2026-05-05', amount: 89.50, category: 'Personal & Discretionary', desc: 'Zara Online' },
+    { id: 4, date: '2026-05-04', amount: 5.50, category: 'Eating Out & Coffee', desc: 'Starbucks Coffee' },
+    { id: 5, date: '2026-05-03', amount: 120.00, category: 'Eating Out & Coffee', desc: 'Restaurant - Temple Bar' },
+    { id: 6, date: '2026-05-02', amount: 35.00, category: 'Groceries', desc: 'Dunnes Stores' },
   ];
   income = [{ id: 1, date: '2026-05-01', amount: 3000, desc: 'Salary' }];
-  weeklyBudget = 300;
+  catBudgets = { 'Groceries': 180, 'Fuel & Transport': 80, 'Utilities & Bills': 95, 'Subscriptions': 25, 'Eating Out & Coffee': 60, 'Kids & Family': 70, 'Health & Fitness': 25, 'Personal & Discretionary': 40 };
   save();
   render();
   alert('✅ Demo data loaded!');
@@ -326,47 +310,43 @@ function loadSampleData() {
 
 function clearAllData() {
   if (confirm('Delete all data?')) {
-    txns = []; income = []; weeklyBudget = 0;
+    txns = []; income = []; catBudgets = {};
     save();
     render();
     alert('✅ Data cleared');
   }
 }
 
-function importFile(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => parseCSV(e.target.result);
-  reader.readAsText(file);
+function openPlaidLink() {
+  alert('🏦 Demo Mode\n\nClick OK to simulate connecting to a test Irish bank account.\n\nIn production, this would connect to your real AIB or Bank of Ireland account.');
+  simulateTestData();
 }
 
-function parseCSV(csvText) {
-  const lines = csvText.trim().split('\n').filter(l => l.trim());
-  if (lines.length < 2) return alert('Invalid CSV');
-  const dateIdx = lines[0].split(',').findIndex(h => /date|posting/i.test(h));
-  const amountIdx = lines[0].split(',').findIndex(h => /amount|debit|credit/i.test(h));
-  const descIdx = lines[0].split(',').findIndex(h => /description|narration/i.test(h));
-
+function simulateTestData() {
+  const testTransactions = [
+    { date: '2026-05-06', amount: 52.50, category: 'Groceries', desc: 'Tesco Supermarket' },
+    { date: '2026-05-05', amount: 18.99, category: 'Fuel & Transport', desc: 'Taxi - Dublin' },
+    { date: '2026-05-05', amount: 89.50, category: 'Personal & Discretionary', desc: 'Zara Online' },
+    { date: '2026-05-04', amount: 5.50, category: 'Eating Out & Coffee', desc: 'Starbucks Coffee' },
+    { date: '2026-05-03', amount: 120.00, category: 'Eating Out & Coffee', desc: 'Cinema Tickets' },
+    { date: '2026-05-02', amount: 35.00, category: 'Groceries', desc: 'Restaurant - Temple Bar' },
+  ];
   let imported = 0;
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',').map(c => c.trim());
-    const date = cols[dateIdx >= 0 ? dateIdx : 0]?.trim();
-    const amountStr = cols[amountIdx >= 0 ? amountIdx : 1]?.trim();
-    const desc = cols[descIdx >= 0 ? descIdx : 2]?.trim();
-    if (!date || !amountStr || !desc) continue;
-    const amount = parseFloat(amountStr.replace(/[€$£,]/g, ''));
-    if (isNaN(amount)) continue;
-    let category = 'Other';
-    for (const [cat, regex] of Object.entries(autoCategories)) {
-      if (regex.test(desc)) { category = cat; break; }
+  testTransactions.forEach(t => {
+    if (!txns.find(x => x.desc === t.desc && x.date === t.date)) {
+      txns.push({ id: Date.now() + Math.random(), ...t });
+      imported++;
     }
-    txns.push({ id: Date.now() + Math.random(), date, amount: Math.abs(amount), category, desc });
-    imported++;
-  }
+  });
   save();
   render();
-  alert(`✅ Imported ${imported} transactions!`);
+  document.getElementById('bankStatus').innerHTML = `✅ <strong>Bank Connected!</strong> Synced ${imported} transactions.`;
+  document.getElementById('connectBankBtn').textContent = '✅ Connected (Test)';
+  document.getElementById('connectBankBtn').disabled = true;
+}
+
+function sumByCategory(cat) {
+  return txns.filter(t => t.category === cat).reduce((sum, t) => sum + t.amount, 0);
 }
 
 function sumByDate(arr, field = 'amount', startDate = null, endDate = null) {
@@ -390,27 +370,24 @@ function filterTransactions() {
       </div>
     </div>
   `).join('') : '<div style="text-align: center; color: #8892b0; padding: 20px;">No transactions yet</div>';
-  const container = document.getElementById('filteredTransactionsList');
-  if (container) container.innerHTML = html;
+  document.getElementById('filteredTransactionsList').innerHTML = html;
 }
 
 function renderCharts() {
   const categorySpending = {};
-  categories.forEach(cat => categorySpending[cat] = 0);
-  txns.forEach(t => {
-    if (categorySpending.hasOwnProperty(t.category)) categorySpending[t.category] += t.amount;
-  });
+  categories.forEach(cat => categorySpending[cat] = sumByCategory(cat));
 
-  if (chartInstances.categoryChart) chartInstances.categoryChart.destroy();
-  const chartCanvas = document.getElementById('categoryChart');
-  if (chartCanvas) {
-    chartInstances.categoryChart = new Chart(chartCanvas, {
+  const categoryCanvas = document.getElementById('categoryChart');
+  if (categoryCanvas) {
+    const ctx = categoryCanvas.getContext('2d');
+    if (window.categoryChart) window.categoryChart.destroy();
+    window.categoryChart = new Chart(ctx, {
       type: 'doughnut',
       data: {
-        labels: Object.keys(categorySpending),
+        labels: categories,
         datasets: [{
           data: Object.values(categorySpending),
-          backgroundColor: ['#00d4aa', '#ff6b9d', '#ffd700', '#4caf50', '#0099ff', '#9c27b0'],
+          backgroundColor: ['#00d4aa', '#ff6b9d', '#ffd700', '#4caf50', '#0099ff', '#9c27b0', '#ff6b6b', '#45a2ff'],
           borderColor: '#1a1a2e',
           borderWidth: 3
         }]
@@ -418,47 +395,7 @@ function renderCharts() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', labels: { color: '#e0e0e0', padding: 12, font: { size: 11, weight: 'bold' } } } }
-      }
-    });
-  }
-
-  const monthLabels = [];
-  const monthData = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    monthLabels.push(d.toLocaleString('en-US', { month: 'short' }));
-    const monthS = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
-    const monthE = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
-    monthData.push(sumByDate(txns, 'amount', monthS, monthE));
-  }
-
-  if (chartInstances.trendChart) chartInstances.trendChart.destroy();
-  const trendCanvas = document.getElementById('trendChart');
-  if (trendCanvas) {
-    chartInstances.trendChart = new Chart(trendCanvas, {
-      type: 'line',
-      data: {
-        labels: monthLabels,
-        datasets: [{
-          label: 'Monthly Spending',
-          data: monthData,
-          borderColor: '#00d4aa',
-          backgroundColor: 'rgba(0, 212, 170, 0.1)',
-          tension: 0.4,
-          fill: true,
-          pointRadius: 5,
-          pointBackgroundColor: '#00d4aa',
-          pointBorderColor: '#1a1a2e',
-          pointBorderWidth: 2
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#e0e0e0', font: { weight: 'bold' }, padding: 16 } } },
-        scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8892b0' } }, x: { ticks: { color: '#8892b0' }, grid: { color: 'rgba(255,255,255,0.05)' } } }
+        plugins: { legend: { position: 'bottom', labels: { color: '#e0e0e0', padding: 12 } } }
       }
     });
   }
@@ -466,107 +403,66 @@ function renderCharts() {
 
 function render() {
   const today = new Date().toISOString().split('T')[0];
-  const [wStart, wEnd] = [new Date(new Date().getTime() - 7*24*60*60*1000).toISOString().split('T')[0], today];
-  const [mStart, mEnd] = [new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0], today];
-
-  const weekSpent = sumByDate(txns, 'amount', wStart, wEnd);
-  const monthSpent = sumByDate(txns, 'amount', mStart, mEnd);
-  const totalIncome = sumByDate(income, 'amount');
-  const balance = totalIncome - sumByDate(txns, 'amount');
-
   const monthName = new Date().toLocaleString('en-US', { month: 'long' });
   document.getElementById('monthHeader').textContent = monthName;
 
+  const totalIncome = sumByDate(income, 'amount');
+  const totalExpenses = sumByDate(txns, 'amount');
+  const balance = totalIncome - totalExpenses;
+
   document.getElementById('dashIncome').textContent = `€${totalIncome.toFixed(2)}`;
-  document.getElementById('dashMonthSpending').textContent = `€${monthSpent.toFixed(2)}`;
+  document.getElementById('dashMonthSpending').textContent = `€${totalExpenses.toFixed(2)}`;
   document.getElementById('dashNetWorth').textContent = `€${balance.toFixed(2)}`;
 
-  document.getElementById('insWeekSpending').textContent = `€${weekSpent.toFixed(2)}`;
-  document.getElementById('insMonthSpending').textContent = `€${monthSpent.toFixed(2)}`;
+  document.getElementById('insWeekSpending').textContent = `€${sumByDate(txns, 'amount', new Date(new Date().getTime() - 7*24*60*60*1000).toISOString().split('T')[0], today).toFixed(2)}`;
+  document.getElementById('insMonthSpending').textContent = `€${totalExpenses.toFixed(2)}`;
   document.getElementById('insBalance').textContent = `€${balance.toFixed(2)}`;
 
-  document.getElementById('weeklyBudgetInput').value = weeklyBudget;
-  document.getElementById('logDate').value = today;
+  // Category budgets form
+  let budgetForm = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">';
+  categories.forEach(cat => {
+    budgetForm += `<div class="form-group"><label>${cat}</label><input type="number" id="budget-${cat}" value="${catBudgets[cat] || ''}" placeholder="€0.00" step="0.01"></div>`;
+  });
+  budgetForm += '</div>';
+  document.getElementById('categoryBudgetsForm').innerHTML = budgetForm;
 
-  // Budget vs Spending
-  if (weeklyBudget > 0) {
-    const percentUsed = (weekSpent / weeklyBudget) * 100;
-    const isOver = weekSpent > weeklyBudget;
-    const remaining = weeklyBudget - weekSpent;
+  // Category spending vs budget
+  let budgetDisplay = '';
+  categories.forEach(cat => {
+    const spent = sumByCategory(cat);
+    const budget = catBudgets[cat] || 0;
+    const isOver = budget > 0 && spent > budget;
+    const percentUsed = budget > 0 ? (spent / budget) * 100 : 0;
 
-    let budgetHTML = `
-      <div style="padding: 16px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; border-left: 4px solid #00d4aa;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-          <span>Weekly Budget</span>
-          <strong>€${weeklyBudget.toFixed(2)}</strong>
+    if (budget > 0) {
+      budgetDisplay += `
+        <div class="category-budget-card ${isOver ? 'over' : ''}">
+          <div class="category-header">
+            <span class="category-name">${cat}</span>
+            <span class="category-spent">€${spent.toFixed(2)}</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: ${Math.min(percentUsed, 100)}%; background: ${isOver ? '#ff6b9d' : '#00d4aa'};"></div>
+          </div>
+          <div class="category-info">
+            <span>${percentUsed.toFixed(0)}% of €${budget.toFixed(2)}</span>
+            <span style="color: ${isOver ? '#ff6b9d' : '#4caf50'};">
+              ${isOver ? `⚠️ €${(spent - budget).toFixed(2)} over` : `✅ €${(budget - spent).toFixed(2)} left`}
+            </span>
+          </div>
         </div>
-        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-          <span>Spent This Week</span>
-          <strong style="color: #ff6b9d;">€${weekSpent.toFixed(2)}</strong>
-        </div>
-        <div style="width: 100%; background: #333; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 12px;">
-          <div style="width: ${Math.min(percentUsed, 100)}%; height: 100%; background: ${isOver ? '#ff6b9d' : '#00d4aa'};"></div>
-        </div>
-        <div style="display: flex; justify-content: space-between; font-size: 0.9rem;">
-          <span>${percentUsed.toFixed(0)}% used</span>
-          <span style="color: ${isOver ? '#ff6b9d' : '#4caf50'};">
-            ${isOver ? `⚠️ €${Math.abs(remaining).toFixed(2)} over` : `✅ €${remaining.toFixed(2)} remaining`}
-          </span>
-        </div>
-      </div>
-    `;
-    document.getElementById('budgetComparison').innerHTML = budgetHTML;
-
-    // Show alert if over budget
-    if (isOver) {
-      document.getElementById('budgetSection').style.display = 'block';
-      document.getElementById('budgetAlert').innerHTML = `You've spent <strong>€${weekSpent.toFixed(2)}</strong> of your €${weeklyBudget.toFixed(2)} budget. <strong style="color: #ff6b9d;">€${Math.abs(remaining).toFixed(2)} over!</strong>`;
-    } else {
-      document.getElementById('budgetSection').style.display = 'none';
+      `;
     }
-  } else {
-    document.getElementById('budgetComparison').innerHTML = '<p style="color: #8892b0; text-align: center; padding: 20px;">Set a weekly budget in Settings to see your spending vs budget</p>';
-  }
+  });
+  if (!budgetDisplay) budgetDisplay = '<p style="color: #8892b0; text-align: center; padding: 20px;">Set category budgets in Settings to track spending</p>';
+  document.getElementById('categoryBudgetDisplay').innerHTML = budgetDisplay;
 
+  document.getElementById('logDate').value = today;
   filterTransactions();
   renderCharts();
 }
 
 render();
-
-// Plaid Integration (Test Mode)
-function openPlaidLink() {
-  alert('🏦 Demo Mode\n\nClick OK to simulate connecting to a test Irish bank account.\n\nIn production, this would connect to your real AIB or Bank of Ireland account.');
-  simulateTestData();
-}
-
-function simulateTestData() {
-  const testTransactions = [
-    { date: '2026-05-06', amount: 52.50, category: 'Food', desc: 'Tesco Supermarket' },
-    { date: '2026-05-05', amount: 18.99, category: 'Transport', desc: 'Taxi - Dublin' },
-    { date: '2026-05-05', amount: 89.50, category: 'Shopping', desc: 'Zara Online' },
-    { date: '2026-05-04', amount: 5.50, category: 'Food', desc: 'Starbucks Coffee' },
-    { date: '2026-05-03', amount: 120.00, category: 'Entertainment', desc: 'Cinema Tickets' },
-    { date: '2026-05-02', amount: 35.00, category: 'Food', desc: 'Restaurant - Temple Bar' },
-  ];
-  importTestTransactions(testTransactions);
-}
-
-function importTestTransactions(transactions) {
-  let imported = 0;
-  transactions.forEach(t => {
-    if (!txns.find(x => x.desc === t.desc && x.date === t.date)) {
-      txns.push({ id: Date.now() + Math.random(), ...t });
-      imported++;
-    }
-  });
-  save();
-  render();
-  document.getElementById('bankStatus').innerHTML = `✅ <strong>Bank Connected!</strong> Synced ${imported} transactions from test account.`;
-  document.getElementById('connectBankBtn').textContent = '✅ Connected (Test)';
-  document.getElementById('connectBankBtn').disabled = true;
-  alert(`✅ Success!\n\nImported ${imported} test transactions.\n\nThese simulate real transactions from an Irish bank account.`);
-}
 </script>
 
 </body>
