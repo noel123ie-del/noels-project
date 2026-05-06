@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Noel - Smart Spending Tracker</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.plaid.com/link/v3/stable/link-initialize.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -213,6 +214,13 @@
         </div>
       </div>
       <button class="btn-primary" onclick="saveBudgetSettings()" style="width: 100%; margin-top: 16px;">Save Settings</button>
+    </div>
+
+    <div class="form-section">
+      <h3>🏦 Connect Your Bank (Live Sync)</h3>
+      <p style="color: #8892b0; margin-bottom: 16px; font-size: 0.9rem;">Auto-sync transactions from AIB, Bank of Ireland, and more.</p>
+      <button class="btn-primary" id="connectBankBtn" onclick="openPlaidLink()" style="width: 100%; margin-bottom: 12px;">🔗 Connect Bank Account</button>
+      <div id="bankStatus" style="font-size: 0.9rem; color: #8892b0;"></div>
     </div>
 
     <div class="form-section">
@@ -475,6 +483,40 @@ function render() {
 }
 
 render();
+
+// Plaid Integration (Test Mode)
+function openPlaidLink() {
+  alert('🏦 Demo Mode\n\nClick OK to simulate connecting to a test Irish bank account.\n\nIn production, this would connect to your real AIB or Bank of Ireland account.');
+  simulateTestData();
+}
+
+function simulateTestData() {
+  const testTransactions = [
+    { date: '2026-05-06', amount: 52.50, category: 'Food', desc: 'Tesco Supermarket' },
+    { date: '2026-05-05', amount: 18.99, category: 'Transport', desc: 'Taxi - Dublin' },
+    { date: '2026-05-05', amount: 89.50, category: 'Shopping', desc: 'Zara Online' },
+    { date: '2026-05-04', amount: 5.50, category: 'Food', desc: 'Starbucks Coffee' },
+    { date: '2026-05-03', amount: 120.00, category: 'Entertainment', desc: 'Cinema Tickets' },
+    { date: '2026-05-02', amount: 35.00, category: 'Food', desc: 'Restaurant - Temple Bar' },
+  ];
+  importTestTransactions(testTransactions);
+}
+
+function importTestTransactions(transactions) {
+  let imported = 0;
+  transactions.forEach(t => {
+    if (!txns.find(x => x.desc === t.desc && x.date === t.date)) {
+      txns.push({ id: Date.now() + Math.random(), ...t });
+      imported++;
+    }
+  });
+  save();
+  render();
+  document.getElementById('bankStatus').innerHTML = `✅ <strong>Bank Connected!</strong> Synced ${imported} transactions from test account.`;
+  document.getElementById('connectBankBtn').textContent = '✅ Connected (Test)';
+  document.getElementById('connectBankBtn').disabled = true;
+  alert(`✅ Success!\n\nImported ${imported} test transactions.\n\nThese simulate real transactions from an Irish bank account.`);
+}
 </script>
 
 </body>
