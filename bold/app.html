@@ -670,12 +670,32 @@ function importCSV(event) {
       }
 
       if (imported === 0) {
-        const reasons = Object.entries(skipReasons).map(([r,c]) => `  ${r}: ${c}`).join('\n');
+        const reasons = Object.entries(skipReasons).map(([r,c]) => `  • ${r}: ${c}`).join('\n');
         return alert(`❌ Could not import any transactions.\n\nDelimiter: "${delim}"\nHeader row: ${headerIdx + 1}\nDate col: ${header[cols.date] || 'NOT FOUND'}\nDesc col: ${header[cols.desc] || 'NOT FOUND'}\nDebit col: ${header[cols.debit] || 'n/a'}\nCredit col: ${header[cols.credit] || 'n/a'}\nAmount col: ${header[cols.amount] || 'n/a'}\n\nSkipped (${skipped}):\n${reasons}`);
       }
       save();
       render();
-      alert(`✅ Imported ${imported} transactions${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
+
+      // User-friendly skip explanations
+      const friendlyLabels = {
+        'zero/no amount': 'Zero-amount rows (interest rate notices, account info, statement headers — not real money movements)',
+        'zero amount': 'Zero-amount rows (interest rate notices, account info, statement headers — not real money movements)',
+        'bad date': 'Rows with no recognisable date (often blank rows or summary lines)',
+        'no description': 'Rows with no description (usually blank rows)',
+        'footer row': 'Footer rows (Total, Closing Balance, etc.)',
+        'too few columns': 'Rows that are blank or malformed',
+      };
+
+      let msg = `✅ Imported ${imported} transactions`;
+      if (skipped > 0) {
+        msg += `\n\nℹ️ ${skipped} row${skipped===1?'':'s'} skipped — this is normal:\n`;
+        for (const [reason, count] of Object.entries(skipReasons)) {
+          const friendly = friendlyLabels[reason] || reason;
+          msg += `\n• ${count} × ${friendly}`;
+        }
+        msg += `\n\nThese are not real transactions — they're informational rows your bank includes in CSV exports. Nothing was lost.`;
+      }
+      alert(msg);
     } catch (err) {
       alert('❌ Error: ' + err.message + '\n\n' + err.stack);
     }
