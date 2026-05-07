@@ -92,6 +92,7 @@
 
 <nav>
   <button class="nav-btn active" onclick="switchSection(event, 'dashboard')">Dashboard</button>
+  <button class="nav-btn" onclick="switchSection(event, 'transactions')">Transactions</button>
   <button class="nav-btn" onclick="switchSection(event, 'daily-log')">Add Spending</button>
   <button class="nav-btn" onclick="switchSection(event, 'budgets')">Budgets</button>
   <button class="nav-btn" onclick="switchSection(event, 'settings')">Settings</button>
@@ -149,6 +150,38 @@
     <div class="form-card">
       <h3>📝 Recent Transactions</h3>
       <div id="filteredTransactionsList"></div>
+    </div>
+  </div>
+
+  <!-- All Transactions (search/filter) -->
+  <div id="transactions" class="section">
+    <div class="stats-grid">
+      <div class="stat-card primary"><div class="stat-label">Total Transactions</div><div class="stat-value" id="txCount">0</div></div>
+      <div class="stat-card danger"><div class="stat-label">Total Spent</div><div class="stat-value" id="txTotalSpent">€0</div></div>
+      <div class="stat-card success"><div class="stat-label">Total Income</div><div class="stat-value" id="txTotalIncome">€0</div></div>
+      <div class="stat-card primary"><div class="stat-label">Net</div><div class="stat-value" id="txNet">€0</div></div>
+    </div>
+
+    <div class="form-card">
+      <h3>🔍 Search & Filter</h3>
+      <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
+        <div class="form-group"><label>Search</label><input type="text" id="txSearch" placeholder="tesco, salary..." oninput="renderAllTransactions()"></div>
+        <div class="form-group"><label>Type</label><select id="txType" onchange="renderAllTransactions()"><option value="all">All</option><option value="out">Spending</option><option value="in">Income</option></select></div>
+        <div class="form-group"><label>Category</label><select id="txCat" onchange="renderAllTransactions()"><option value="all">All categories</option></select></div>
+        <div class="form-group"><label>Account</label><select id="txAcc" onchange="renderAllTransactions()"><option value="all">All accounts</option></select></div>
+        <div class="form-group"><label>From date</label><input type="date" id="txFrom" onchange="renderAllTransactions()"></div>
+        <div class="form-group"><label>To date</label><input type="date" id="txTo" onchange="renderAllTransactions()"></div>
+        <div class="form-group"><label>Sort</label><select id="txSort" onchange="renderAllTransactions()"><option value="date-desc">Newest first</option><option value="date-asc">Oldest first</option><option value="amt-desc">Highest amount</option><option value="amt-asc">Lowest amount</option></select></div>
+        <div class="form-group" style="display:flex; align-items:end; gap:8px;">
+          <button class="btn btn-primary" onclick="clearTxFilters()" style="flex:1;">Clear</button>
+          <button class="btn btn-primary" onclick="exportFilteredCSV()" style="flex:1; background:#43e97b;">⬇ CSV</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <h3 id="txResultsHeading">All Transactions</h3>
+      <div id="allTransactionsList"></div>
     </div>
   </div>
 
@@ -777,6 +810,131 @@ function getWeekRange() {
   return { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] };
 }
 
+// ====== Transactions tab ======
+function clearTxFilters() {
+  ['txSearch','txFrom','txTo'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['txType','txCat','txAcc'].forEach(id => { const el = document.getElementById(id); if (el) el.value = 'all'; });
+  document.getElementById('txSort').value = 'date-desc';
+  renderAllTransactions();
+}
+
+function populateTxFilterDropdowns() {
+  const catSel = document.getElementById('txCat');
+  const accSel = document.getElementById('txAcc');
+  if (!catSel || !accSel) return;
+  // Categories
+  const cats = new Set([...categories]);
+  txns.forEach(t => t.category && cats.add(t.category));
+  const curCat = catSel.value;
+  catSel.innerHTML = '<option value="all">All categories</option>' + [...cats].map(c => `<option value="${c}">${c}</option>`).join('');
+  catSel.value = curCat || 'all';
+  // Accounts
+  const accs = new Set([...accounts]);
+  txns.forEach(t => t.account && accs.add(t.account));
+  income.forEach(t => t.account && accs.add(t.account));
+  const curAcc = accSel.value;
+  accSel.innerHTML = '<option value="all">All accounts</option>' + [...accs].map(a => `<option value="${a}">${a}</option>`).join('');
+  accSel.value = curAcc || 'all';
+}
+
+function getFilteredTransactions() {
+  const search = (document.getElementById('txSearch')?.value || '').toLowerCase().trim();
+  const type   = document.getElementById('txType')?.value || 'all';
+  const cat    = document.getElementById('txCat')?.value || 'all';
+  const acc    = document.getElementById('txAcc')?.value || 'all';
+  const from   = document.getElementById('txFrom')?.value || '';
+  const to     = document.getElementById('txTo')?.value || '';
+  const sort   = document.getElementById('txSort')?.value || 'date-desc';
+
+  // Combine txns + income with type tag
+  let combined = [
+    ...txns.map(t => ({ ...t, _type: 'out' })),
+    ...income.map(t => ({ ...t, _type: 'in', category: t.category || 'Income' })),
+  ];
+
+  if (type !== 'all') combined = combined.filter(t => t._type === type);
+  if (cat !== 'all')  combined = combined.filter(t => t.category === cat);
+  if (acc !== 'all')  combined = combined.filter(t => t.account === acc);
+  if (from)           combined = combined.filter(t => t.date >= from);
+  if (to)             combined = combined.filter(t => t.date <= to);
+  if (search) {
+    combined = combined.filter(t =>
+      (t.desc || '').toLowerCase().includes(search) ||
+      (t.category || '').toLowerCase().includes(search) ||
+      (t.account || '').toLowerCase().includes(search)
+    );
+  }
+
+  switch (sort) {
+    case 'date-asc':  combined.sort((a,b) => new Date(a.date) - new Date(b.date)); break;
+    case 'amt-desc':  combined.sort((a,b) => b.amount - a.amount); break;
+    case 'amt-asc':   combined.sort((a,b) => a.amount - b.amount); break;
+    default:          combined.sort((a,b) => new Date(b.date) - new Date(a.date));
+  }
+  return combined;
+}
+
+function renderAllTransactions() {
+  populateTxFilterDropdowns();
+  const list = getFilteredTransactions();
+
+  const totalSpent = list.filter(t => t._type === 'out').reduce((s,t) => s + t.amount, 0);
+  const totalIncome = list.filter(t => t._type === 'in').reduce((s,t) => s + t.amount, 0);
+  const net = totalIncome - totalSpent;
+
+  document.getElementById('txCount').textContent = list.length;
+  document.getElementById('txTotalSpent').textContent  = '€' + totalSpent.toLocaleString('en-IE', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('txTotalIncome').textContent = '€' + totalIncome.toLocaleString('en-IE', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('txNet').textContent         = (net < 0 ? '-€' : '€') + Math.abs(net).toLocaleString('en-IE', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+  const heading = document.getElementById('txResultsHeading');
+  if (heading) heading.textContent = `Transactions (${list.length})`;
+
+  // Limit DOM to 500 rows for perf
+  const display = list.slice(0, 500);
+  const html = display.length ? display.map(t => {
+    const isIn = t._type === 'in';
+    const sign = isIn ? '+' : '-';
+    const color = isIn ? '#43e97b' : '#fa709a';
+    return `
+    <div class="transaction-item">
+      <div class="transaction-info">
+        <div class="transaction-desc">${(t.desc || '').replace(/</g,'&lt;')}</div>
+        <div class="transaction-meta">${t.category || (isIn ? 'Income' : '—')} • ${t.account || '—'} • ${t.date}</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="transaction-amount" style="color:${color}; font-weight:700;" onclick="${isIn ? '' : `editTxn(${t.id})`}">${sign}€${t.amount.toFixed(2)}</div>
+        <button class="delete-btn" onclick="${isIn ? `deleteIncome(${t.id})` : `deleteTxn(${t.id})`}">×</button>
+      </div>
+    </div>`;
+  }).join('') : '<div style="text-align:center; color:#8fa3b8; padding:30px;">No transactions match these filters</div>';
+
+  const more = list.length > 500 ? `<div style="text-align:center; color:#8fa3b8; padding:12px; font-size:0.85rem;">Showing first 500 of ${list.length} — refine filters to see more</div>` : '';
+  document.getElementById('allTransactionsList').innerHTML = html + more;
+}
+
+function deleteIncome(id) {
+  if (confirm('Delete this income entry?')) {
+    income = income.filter(i => i.id !== id);
+    save();
+    render();
+    renderAllTransactions();
+  }
+}
+
+function exportFilteredCSV() {
+  const list = getFilteredTransactions();
+  if (!list.length) return alert('No transactions to export');
+  const rows = [['Date','Type','Description','Category','Account','Amount']];
+  list.forEach(t => rows.push([t.date, t._type === 'in' ? 'Income' : 'Spending', t.desc || '', t.category || '', t.account || '', t.amount.toFixed(2)]));
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `transactions-${new Date().toISOString().split('T')[0]}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
 function filterTransactions() {
   let filtered = txns.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 20);
   const html = filtered.length ? filtered.map(t => `
@@ -907,6 +1065,7 @@ function render() {
   document.getElementById('logDate').value = new Date().toISOString().split('T')[0];
   filterTransactions();
   renderCharts();
+  if (document.getElementById('allTransactionsList')) renderAllTransactions();
 }
 
 render();
