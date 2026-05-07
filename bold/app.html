@@ -102,6 +102,34 @@
     .chart-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
     .chart-wrapper { position: relative; height: 300px; }
 
+    /* ======= v1.10 Final Polish ======= */
+    /* Skeleton loader */
+    .skeleton { background: linear-gradient(90deg, var(--bg-soft) 25%, var(--border) 50%, var(--bg-soft) 75%); background-size: 200% 100%; animation: skel 1.4s ease-in-out infinite; border-radius: 8px; }
+    @keyframes skel { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* Touch ripple */
+    .ripple { position: relative; overflow: hidden; }
+    .ripple-effect { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.6); pointer-events: none; transform: scale(0); animation: ripple 0.6s ease-out; }
+    @keyframes ripple { to { transform: scale(4); opacity: 0; } }
+
+    /* Swipe-to-delete */
+    .swipe-row { position: relative; overflow: hidden; touch-action: pan-y; }
+    .swipe-row .swipe-content { transition: transform 0.25s; background: var(--bg-card); position: relative; z-index: 2; }
+    .swipe-row .swipe-actions { position: absolute; top: 0; right: 0; bottom: 0; display: flex; align-items: center; padding: 0 16px; background: linear-gradient(90deg, transparent, var(--danger)); color: white; font-weight: 700; pointer-events: none; }
+
+    /* AI chat */
+    .ai-chat { background: var(--bg-soft); border-radius: 12px; padding: 12px; max-height: 320px; overflow-y: auto; margin-bottom: 12px; }
+    .ai-msg { margin-bottom: 8px; padding: 10px 14px; border-radius: 12px; max-width: 80%; }
+    .ai-msg.user { background: var(--accent); color: white; margin-left: auto; }
+    .ai-msg.bot { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
+    .ai-input-row { display: flex; gap: 8px; }
+    .ai-input-row input { flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); color: var(--text); }
+
+    /* Receipt thumb */
+    .receipt-thumb { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; cursor: pointer; vertical-align: middle; margin-left: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    .receipt-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999; cursor: pointer; }
+    .receipt-modal img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
+
     /* ======= v1.9 Niche additions ======= */
     @media print {
       header, .emoji-nav, .fab, .theme-toggle, .toggle-group, .numpad-grid, .numpad-display, .cat-picker, details, .form-card button, .delete-btn, button { display: none !important; }
@@ -467,6 +495,19 @@
       <div id="weeklyRecap" style="line-height: 1.8;"></div>
     </div>
 
+    <!-- AI Assistant -->
+    <div class="form-card">
+      <h3>🤖 Ask Thrift</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Ask questions like "How much on coffee last month?" or "What's my biggest category?"</p>
+      <div class="ai-chat" id="aiChat">
+        <div class="ai-msg bot">👋 Hi! I can answer questions about your spending. Try: <em>"How much did I spend this week?"</em> or <em>"What's my biggest expense?"</em></div>
+      </div>
+      <div class="ai-input-row">
+        <input type="text" id="aiInput" placeholder="Ask anything..." onkeypress="if(event.key==='Enter')askAI()">
+        <button class="btn btn-primary" onclick="askAI()">Ask</button>
+      </div>
+    </div>
+
     <!-- Subscription detection -->
     <div class="form-card">
       <h3>🔁 Recurring Subscriptions</h3>
@@ -518,6 +559,13 @@
       <div class="label">Net Worth</div>
       <div class="amount" id="netWorthValue">€0</div>
       <div class="sub" id="netWorthSub">Assets minus liabilities</div>
+    </div>
+
+    <!-- Net worth over time -->
+    <div class="chart-card">
+      <h3>📈 Net Worth Over Time</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.85rem;">Snapshots saved each time you update assets/liabilities</p>
+      <div class="chart-wrapper"><canvas id="netWorthHistoryChart"></canvas></div>
     </div>
 
     <!-- Savings goals -->
@@ -703,6 +751,9 @@ let baseCurrency = localStorage.getItem('baseCurrency') || 'EUR';
 let voiceRecognition = null;
 let voiceListening = false;
 
+// v1.10 data
+let netWorthHistory = JSON.parse(localStorage.getItem('netWorthHistory') || '[]');
+
 const categories = ['Groceries', 'Fuel & Transport', 'Utilities & Bills', 'Subscriptions', 'Eating Out & Coffee', 'Kids & Family', 'Health & Fitness', 'Personal & Discretionary'];
 const accounts = ['AIB Personal', 'AIB Business', 'Revolut', 'Credit Union', 'Cash'];
 
@@ -719,6 +770,7 @@ function save() {
   localStorage.setItem('userCategoryRules', JSON.stringify(userCategoryRules));
   localStorage.setItem('saveRules', JSON.stringify(saveRules));
   localStorage.setItem('baseCurrency', baseCurrency);
+  localStorage.setItem('netWorthHistory', JSON.stringify(netWorthHistory));
 }
 
 function switchSection(event, sectionId) {
@@ -1582,6 +1634,523 @@ function celebrate() {
   tick();
 }
 
+// ====== v1.10 Net worth history ======
+function snapshotNetWorth() {
+  const total = assets.reduce((s, a) => s + a.value, 0) - liabilities.reduce((s, l) => s + l.value, 0);
+  const today = new Date().toISOString().split('T')[0];
+  // If snapshot exists for today, update it; otherwise add new
+  const existing = netWorthHistory.find(s => s.date === today);
+  if (existing) existing.value = total;
+  else netWorthHistory.push({ date: today, value: total });
+  // Keep last 365 entries
+  if (netWorthHistory.length > 365) netWorthHistory = netWorthHistory.slice(-365);
+  save();
+}
+function renderNetWorthHistory() {
+  const canvas = document.getElementById('netWorthHistoryChart');
+  if (!canvas) return;
+  if (_chartInstances.netWorth) _chartInstances.netWorth.destroy();
+  if (netWorthHistory.length < 2) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.parentElement.innerHTML = '<div class="empty-state"><div class="illust">📈</div><div class="title">Not enough data yet</div><div class="hint">Add assets/liabilities on different days to see your trend.</div></div>';
+    return;
+  }
+  const labels = netWorthHistory.map(s => s.date);
+  const data = netWorthHistory.map(s => s.value);
+  _chartInstances.netWorth = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Net Worth',
+        data,
+        borderColor: '#43e97b',
+        backgroundColor: 'rgba(67,233,123,0.1)',
+        tension: 0.4,
+        fill: true,
+        pointRadius: 4,
+        pointBackgroundColor: '#43e97b',
+      }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } }
+  });
+}
+
+// ====== v1.10 AI Q&A assistant ======
+function askAI() {
+  const input = document.getElementById('aiInput');
+  const chat = document.getElementById('aiChat');
+  if (!input || !chat) return;
+  const q = input.value.trim();
+  if (!q) return;
+  chat.innerHTML += `<div class="ai-msg user">${q.replace(/</g, '&lt;')}</div>`;
+  input.value = '';
+  const answer = answerQuestion(q);
+  setTimeout(() => {
+    chat.innerHTML += `<div class="ai-msg bot">${answer}</div>`;
+    chat.scrollTop = chat.scrollHeight;
+  }, 400);
+  chat.scrollTop = chat.scrollHeight;
+}
+// Knowledge base of common merchants → cheaper alternatives (Irish/UK focus)
+const cheaperAlternatives = {
+  // Groceries
+  'tesco': ['Lidl', 'Aldi', 'Dunnes Stores'],
+  'dunnes': ['Lidl', 'Aldi', 'SuperValu (Real Reward)'],
+  'supervalu': ['Lidl', 'Aldi', 'Dunnes'],
+  'spar': ['Lidl', 'Aldi (per-litre cheapest milk/bread)'],
+  'centra': ['Lidl', 'Aldi', 'do bigger weekly shop, fewer top-ups'],
+  // Coffee/Eating out
+  'starbucks': ['Costa rewards (free 8th drink)', 'Make at home with €30 cafetière saves ~€80/month', 'Insomnia coffee'],
+  'costa': ['Make at home', 'Independent local cafés often €1 cheaper', 'Tesco/Spar coffee €2'],
+  'butlers': ['Insomnia', 'Independent local'],
+  'mcdonald': ['Aldi/Lidl frozen items', 'Cook at home — €5 vs €10 saves €150/month if 30×'],
+  'deliveroo': ['Cook at home', 'Order pickup directly (save delivery fees)', 'Just Eat sometimes cheaper'],
+  'just eat': ['Order pickup directly', 'Cook at home'],
+  'uber eats': ['Order pickup directly', 'Cook at home'],
+  // Subscriptions
+  'netflix': ['Netflix Standard with ads (€7 vs €13)', 'Share Premium with family', 'Disney+ (€8) similar value'],
+  'spotify': ['Spotify Family (€18 split 6 ways = €3 each)', 'Apple Music Student (€5)', 'YouTube Music free with ads'],
+  'apple music': ['Spotify Family', 'YouTube Music free'],
+  'disney': ['Yearly plan saves vs monthly', 'Share with family'],
+  'amazon prime': ['Cancel if not using video — Prime Video is the main value'],
+  'sky': ['Saorview free for Irish channels', 'Virgin Media often cheaper', 'Negotiate annually — call to leave'],
+  'virgin media': ['Saorview + streaming', 'Eir, Three, Vodafone fibre similar prices'],
+  // Utilities
+  'electric ireland': ['Switch via bonkers.ie or switcher.ie — typically save €100-300/yr', 'Energia or Bord Gáis often cheaper'],
+  'esb': ['Switch supplier annually for new-customer discount', 'Compare on switcher.ie'],
+  'bord gais': ['Switch annually', 'Compare on bonkers.ie'],
+  'eir': ['Sky/Virgin/Three often cheaper', 'Negotiate on contract end'],
+  'vodafone': ['48 (€12.99/mth)', 'GoMo (€12.99/mth unlimited)', 'Tesco Mobile prepay'],
+  'three': ['48', 'GoMo', 'Always check renewal'],
+  // Transport
+  'taxi': ['FreeNow split fare', 'Bus/Luas/Dart for known routes', 'Bolt sometimes cheaper'],
+  'uber': ['FreeNow', 'Bolt', 'Public transport'],
+  'free now': ['Bolt sometimes cheaper', 'Public transport'],
+  'ryanair': ['Aer Lingus regular sales', 'Skyscanner check', 'Book Tue afternoons (statistically cheapest)'],
+  'aer lingus': ['Ryanair often cheaper for short EU', 'Sign up for AerClub voucher emails'],
+  // Shopping
+  'amazon': ['Compare on amazon.co.uk vs .com sometimes cheaper', 'Argos/Currys for electronics returns easier in IE', 'eBay used'],
+  'zara': ['H&M', 'Penneys/Primark'],
+  'primark': ['Already cheap — but check Penneys app for new arrivals'],
+  'h&m': ['Penneys', 'Sale-only purchases'],
+  'argos': ['Currys often matches', 'Amazon if delivery acceptable'],
+  // Fitness
+  'flyefit': ['Westwood', 'Curves', 'Council leisure centres ~€30/mth'],
+  'westwood': ['Council leisure centres', 'PureGym Belfast if up north'],
+};
+
+function suggestCheaperFor(term) {
+  const t = term.toLowerCase().replace(/[^a-z]/g, '');
+  for (const [key, alts] of Object.entries(cheaperAlternatives)) {
+    const k = key.replace(/[^a-z]/g, '');
+    if (t.includes(k) || k.includes(t)) {
+      return alts;
+    }
+  }
+  return null;
+}
+
+// Category-level savings tips
+const categoryTips = {
+  'Groceries': ['Lidl/Aldi typically 30% cheaper than Tesco/Dunnes', 'Plan meals weekly, write list, stick to it', 'Buy own-brand staples (rice, pasta, oats) — saves ~€20/mth', 'Yellow-sticker reductions after 7pm'],
+  'Fuel & Transport': ['Apply for the Leap card 90-day pass — saves ~€30/mth in Dublin', 'Carpool with colleagues', 'Switch to electric for big drivers — €150-300/mth fuel → ~€40 charging', 'Bike-to-work scheme saves up to 52%'],
+  'Utilities & Bills': ['Switch electricity/gas annually — €200-500/yr', 'Switch to GoMo or 48 mobile (€12.99/mth)', 'Cancel landline if rarely used', 'Check broadband discount when contract ends'],
+  'Subscriptions': ['Audit list — cancel anything unused 30 days', 'Switch monthly to annual where cheaper', 'Share family plans (Spotify, Netflix Premium)', 'Use student/educator discounts'],
+  'Eating Out & Coffee': ['Limit to 2x/week — saves €40-100/mth', 'Order pickup not delivery — saves €4-7 per order', 'Make coffee at home 4 days, café 1 day', 'Use loyalty cards (Insomnia, Costa)'],
+  'Kids & Family': ['Hand-me-downs networks (Aldi clothing)', 'Library activities free', 'School uniform second-hand sales'],
+  'Health & Fitness': ['Council leisure centres €25-40/mth', 'Outdoor running free', 'YouTube fitness saves gym fees'],
+  'Personal & Discretionary': ['"Want vs need" 24-hr rule', 'Wait for sales (Black Friday, Boxing Day)', 'Sell unused items on Adverts.ie or DoneDeal'],
+};
+
+function answerQuestion(q) {
+  const lower = q.toLowerCase();
+
+  // Cheaper alternative requests
+  if (/cheaper|alternative|save (money|on)|how to save|reduce|cut/i.test(lower)) {
+    // Try to extract specific merchant/category
+    const onMatch = lower.match(/(?:cheaper|alternative|save).*?(?:for|on|than)\s+(.+?)(?:\?|$)/);
+    if (onMatch) {
+      const term = onMatch[1].replace(/[?!.]/g, '').trim();
+      const alts = suggestCheaperFor(term);
+      if (alts) {
+        return `💡 Cheaper alternatives to <strong>${term}</strong>:<br>• ${alts.join('<br>• ')}`;
+      }
+      // Try category match
+      for (const [cat, tips] of Object.entries(categoryTips)) {
+        if (cat.toLowerCase().includes(term) || term.includes(cat.toLowerCase())) {
+          return `💡 Tips to save on <strong>${cat}</strong>:<br>• ${tips.join('<br>• ')}`;
+        }
+      }
+    }
+    // Find user's biggest category and suggest tips for it
+    const sums = {};
+    txns.forEach(t => { sums[t.category] = (sums[t.category] || 0) + t.amount; });
+    const sorted = Object.entries(sums).sort((a, b) => b[1] - a[1]);
+    if (!sorted.length) return 'Add some transactions first and I can suggest cheaper alternatives based on your spending.';
+    const topCat = sorted[0][0];
+    const topMerchants = txns
+      .filter(t => t.category === topCat)
+      .reduce((acc, t) => { const k = (t.desc || '').toLowerCase(); acc[k] = (acc[k] || 0) + t.amount; return acc; }, {});
+    const topMerchant = Object.entries(topMerchants).sort((a, b) => b[1] - a[1])[0];
+
+    let html = `Your biggest category is <strong>${topCat}</strong> (${currencySymbol()}${sorted[0][1].toFixed(2)}).<br><br>💡 Tips:<br>• ${(categoryTips[topCat] || []).join('<br>• ')}`;
+    if (topMerchant) {
+      const merchAlts = suggestCheaperFor(topMerchant[0]);
+      if (merchAlts) {
+        html += `<br><br>You spend most at <strong>${topMerchant[0]}</strong> — try:<br>• ${merchAlts.join('<br>• ')}`;
+      }
+    }
+    return html;
+  }
+
+  // Period detection
+  // How much on X (category or merchant)
+  const onMatch = lower.match(/(?:how much|spent?|spending).*?(?:on|for)\s+(.+?)(?:\?|$|\s+(?:last|this|yesterday|today))/);
+  // Period detection
+  let period = 'all';
+  let periodLabel = 'in total';
+  let cutoff = '';
+  const today = new Date();
+  if (/last week/i.test(lower)) { const d = new Date(today); d.setDate(d.getDate() - 7); cutoff = d.toISOString().split('T')[0]; periodLabel = 'last week'; }
+  else if (/this week/i.test(lower)) { const monday = new Date(today); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); cutoff = monday.toISOString().split('T')[0]; periodLabel = 'this week'; }
+  else if (/last month/i.test(lower)) { cutoff = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0]; periodLabel = 'last month'; }
+  else if (/this month/i.test(lower)) { cutoff = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]; periodLabel = 'this month'; }
+  else if (/today/i.test(lower)) { cutoff = today.toISOString().split('T')[0]; periodLabel = 'today'; }
+  else if (/yesterday/i.test(lower)) { const d = new Date(today); d.setDate(d.getDate() - 1); cutoff = d.toISOString().split('T')[0]; periodLabel = 'yesterday'; }
+
+  const filtered = cutoff ? txns.filter(t => t.date >= cutoff) : txns;
+
+  if (onMatch) {
+    const term = onMatch[1].replace(/[?!.]/g, '').trim();
+    const matched = filtered.filter(t =>
+      (t.desc || '').toLowerCase().includes(term) ||
+      (t.category || '').toLowerCase().includes(term)
+    );
+    if (!matched.length) return `No transactions matching "${term}" ${periodLabel}.`;
+    const total = matched.reduce((s, t) => s + t.amount, 0);
+    return `You spent <strong>${currencySymbol()}${total.toFixed(2)}</strong> on ${term} ${periodLabel} across ${matched.length} transaction${matched.length > 1 ? 's' : ''}.`;
+  }
+
+  // Biggest category
+  if (/biggest|largest|top|most expensive/.test(lower) && /categor/.test(lower)) {
+    const sums = {};
+    filtered.forEach(t => { sums[t.category] = (sums[t.category] || 0) + t.amount; });
+    const sorted = Object.entries(sums).sort((a, b) => b[1] - a[1]);
+    if (!sorted.length) return 'No transactions yet.';
+    return `Your biggest category ${periodLabel} is <strong>${sorted[0][0]}</strong> at ${currencySymbol()}${sorted[0][1].toFixed(2)}.`;
+  }
+
+  // Biggest single transaction
+  if (/biggest|largest|most expensive/.test(lower)) {
+    if (!filtered.length) return 'No transactions in that period.';
+    const big = filtered.sort((a, b) => b.amount - a.amount)[0];
+    return `Your biggest transaction ${periodLabel} was <strong>${big.desc}</strong> at ${currencySymbol()}${big.amount.toFixed(2)} on ${big.date}.`;
+  }
+
+  // How much (total)
+  if (/how much|total spend/.test(lower)) {
+    const total = filtered.reduce((s, t) => s + t.amount, 0);
+    return `You spent <strong>${currencySymbol()}${total.toFixed(2)}</strong> ${periodLabel} across ${filtered.length} transactions.`;
+  }
+
+  // Income
+  if (/income|earn/.test(lower)) {
+    const inc = (cutoff ? income.filter(i => i.date >= cutoff) : income).reduce((s, i) => s + i.amount, 0);
+    return `Your income ${periodLabel} was <strong>${currencySymbol()}${inc.toFixed(2)}</strong>.`;
+  }
+
+  // Net / saving
+  if (/net|saving/.test(lower)) {
+    const inc = (cutoff ? income.filter(i => i.date >= cutoff) : income).reduce((s, i) => s + i.amount, 0);
+    const out = filtered.reduce((s, t) => s + t.amount, 0);
+    const net = inc - out;
+    return `Net ${periodLabel}: <strong>${currencySymbol()}${net.toFixed(2)}</strong> (${currencySymbol()}${inc.toFixed(2)} in − ${currencySymbol()}${out.toFixed(2)} out).`;
+  }
+
+  // Subscriptions
+  if (/subscription|recurring/.test(lower)) {
+    const subs = detectSubscriptions();
+    if (!subs.length) return 'No recurring subscriptions detected.';
+    const monthly = subs.filter(s => s.cycle === 'Monthly').reduce((sum, s) => sum + s.avgAmount, 0);
+    return `You have <strong>${subs.length}</strong> recurring subscriptions costing about <strong>${currencySymbol()}${monthly.toFixed(2)}/month</strong>.`;
+  }
+
+  // Net worth
+  if (/net worth|wealth/.test(lower)) {
+    const total = assets.reduce((s, a) => s + a.value, 0) - liabilities.reduce((s, l) => s + l.value, 0);
+    return `Your current net worth is <strong>${currencySymbol()}${total.toFixed(2)}</strong>.`;
+  }
+
+  // Goals
+  if (/goal/.test(lower)) {
+    if (!goals.length) return 'You have no goals set yet. Add one in the Goals tab.';
+    const done = goals.filter(g => g.current >= g.target).length;
+    return `You have <strong>${goals.length}</strong> goal${goals.length > 1 ? 's' : ''} (${done} achieved). Total target: ${currencySymbol()}${goals.reduce((s, g) => s + g.target, 0).toFixed(2)}.`;
+  }
+
+  // Help
+  if (/help|what can you|how do/.test(lower)) {
+    return `I can answer:<br>• "How much on coffee last month?"<br>• "What's my biggest category?"<br>• "How much income this week?"<br>• "What's my net worth?"<br>• "How many subscriptions?"<br>• "What's my net this month?"`;
+  }
+
+  // Average / typical
+  if (/average|typical|usual/.test(lower)) {
+    if (/per (day|week|month)/.test(lower)) {
+      const total = filtered.reduce((s, t) => s + t.amount, 0);
+      let unit = 'day', divisor = 1;
+      if (/week/.test(lower)) { unit = 'week'; divisor = 7; }
+      else if (/month/.test(lower)) { unit = 'month'; divisor = 30; }
+      // Determine actual span
+      if (filtered.length) {
+        const dates = filtered.map(t => t.date).sort();
+        const span = Math.max(1, (new Date(dates[dates.length - 1]) - new Date(dates[0])) / 86400000);
+        const days = span + 1;
+        let div = days;
+        if (unit === 'week') div = days / 7;
+        if (unit === 'month') div = days / 30;
+        return `Your average spending is <strong>${currencySymbol()}${(total / div).toFixed(2)} per ${unit}</strong> over ${Math.round(days)} days.`;
+      }
+    }
+    if (filtered.length) {
+      const avg = filtered.reduce((s, t) => s + t.amount, 0) / filtered.length;
+      return `Your average transaction ${periodLabel} is <strong>${currencySymbol()}${avg.toFixed(2)}</strong> (${filtered.length} transactions).`;
+    }
+  }
+
+  // Top merchants
+  if (/top|most|frequent|favourite/.test(lower) && /(merchant|shop|place|where)/.test(lower)) {
+    const merchSums = {};
+    filtered.forEach(t => { const k = t.desc || 'Unknown'; merchSums[k] = (merchSums[k] || 0) + t.amount; });
+    const sorted = Object.entries(merchSums).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    if (!sorted.length) return 'No transactions yet.';
+    return `Top spending places ${periodLabel}:<br>${sorted.map((m, i) => `${i + 1}. <strong>${m[0]}</strong> — ${currencySymbol()}${m[1].toFixed(2)}`).join('<br>')}`;
+  }
+
+  // Compare vs last week/month
+  if (/compare|vs|versus|than (last|this)/.test(lower)) {
+    const today = new Date();
+    let thisStart, thisEnd, lastStart, lastEnd, label;
+    if (/month/.test(lower)) {
+      thisStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+      thisEnd = today.toISOString().split('T')[0];
+      lastStart = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0];
+      lastEnd = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0];
+      label = 'month';
+    } else {
+      const wr = getWeekRange();
+      thisStart = wr.start; thisEnd = wr.end;
+      lastStart = new Date(new Date(thisStart).getTime() - 7 * 86400000).toISOString().split('T')[0];
+      lastEnd = new Date(new Date(thisEnd).getTime() - 7 * 86400000).toISOString().split('T')[0];
+      label = 'week';
+    }
+    const t1 = txns.filter(t => t.date >= thisStart && t.date <= thisEnd).reduce((s, t) => s + t.amount, 0);
+    const t0 = txns.filter(t => t.date >= lastStart && t.date <= lastEnd).reduce((s, t) => s + t.amount, 0);
+    if (t0 === 0) return `This ${label}: ${currencySymbol()}${t1.toFixed(2)}. No data for last ${label}.`;
+    const diff = t1 - t0;
+    const pct = ((diff / t0) * 100).toFixed(0);
+    return `This ${label}: <strong>${currencySymbol()}${t1.toFixed(2)}</strong><br>Last ${label}: ${currencySymbol()}${t0.toFixed(2)}<br>${diff >= 0 ? '⬆️' : '⬇️'} ${diff >= 0 ? '+' : ''}${pct}% (${currencySymbol()}${Math.abs(diff).toFixed(2)} ${diff >= 0 ? 'more' : 'less'})`;
+  }
+
+  // Day of week analysis
+  if (/(day|busiest day|spend most)/.test(lower) && /(week|spend)/.test(lower)) {
+    const dows = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const sums = [0, 0, 0, 0, 0, 0, 0];
+    filtered.forEach(t => { const d = new Date(t.date).getDay(); sums[d] += t.amount; });
+    const maxIdx = sums.indexOf(Math.max(...sums));
+    return `You spend most on <strong>${dows[maxIdx]}s</strong> (${currencySymbol()}${sums[maxIdx].toFixed(2)} ${periodLabel}).`;
+  }
+
+  // Budget questions
+  if (/budget|over.budget|under.budget|left/.test(lower)) {
+    const ws = getWeekRange();
+    const wkSpent = txns.filter(t => t.date >= ws.start && t.date <= ws.end).reduce((s, t) => s + t.amount, 0);
+    const remaining = weeklyBudget - wkSpent;
+    if (remaining < 0) return `You're <strong>${currencySymbol()}${Math.abs(remaining).toFixed(2)} OVER</strong> your weekly budget of ${currencySymbol()}${weeklyBudget.toFixed(2)}.`;
+    const daysLeft = 7 - new Date().getDay() || 7;
+    return `You have <strong>${currencySymbol()}${remaining.toFixed(2)}</strong> left of your ${currencySymbol()}${weeklyBudget.toFixed(2)} weekly budget — ${currencySymbol()}${(remaining / Math.max(1, daysLeft)).toFixed(2)}/day for ${daysLeft} day${daysLeft > 1 ? 's' : ''}.`;
+  }
+
+  // Forecast / prediction
+  if (/forecast|predict|projection|end of (month|week)|next month/.test(lower)) {
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const todayStr = today.toISOString().split('T')[0];
+    const spent = txns.filter(t => t.date >= monthStart && t.date <= todayStr).reduce((s, t) => s + t.amount, 0);
+    const incomeM = income.filter(t => t.date >= monthStart && t.date <= todayStr).reduce((s, t) => s + t.amount, 0);
+    const thirtyAgo = new Date(today); thirtyAgo.setDate(thirtyAgo.getDate() - 30);
+    const last30 = txns.filter(t => t.date >= thirtyAgo.toISOString().split('T')[0]).reduce((s, t) => s + t.amount, 0);
+    const dailyAvg = last30 / 30;
+    const daysRemaining = Math.max(0, Math.round((monthEnd - today) / 86400000));
+    const projected = spent + (dailyAvg * daysRemaining);
+    const projNet = incomeM - projected;
+    return `Projected end-of-month: <strong>${currencySymbol()}${projected.toFixed(2)}</strong> total spending. Net: <strong>${projNet >= 0 ? '+' : ''}${currencySymbol()}${projNet.toFixed(2)}</strong> (vs income so far). Based on ${currencySymbol()}${dailyAvg.toFixed(2)}/day average.`;
+  }
+
+  // Frequency / how many times
+  if (/how (often|many times|frequent)|times.*(spent|bought|visited)/.test(lower)) {
+    const onMatch2 = lower.match(/(?:on|at|to|for)\s+(.+?)(?:\?|$)/);
+    if (onMatch2) {
+      const term = onMatch2[1].replace(/[?!.]/g, '').trim();
+      const matched = filtered.filter(t => (t.desc || '').toLowerCase().includes(term) || (t.category || '').toLowerCase().includes(term));
+      return `You bought from "${term}" <strong>${matched.length}</strong> times ${periodLabel}, totalling ${currencySymbol()}${matched.reduce((s,t)=>s+t.amount,0).toFixed(2)}.`;
+    }
+    return `Total transactions ${periodLabel}: <strong>${filtered.length}</strong>.`;
+  }
+
+  // By account
+  if (/account|aib|revolut|cash|credit union/.test(lower)) {
+    const matches = accounts.find(a => lower.includes(a.toLowerCase().split(' ')[0]));
+    if (matches) {
+      const acctTxns = filtered.filter(t => t.account === matches);
+      const total = acctTxns.reduce((s, t) => s + t.amount, 0);
+      return `<strong>${matches}</strong> ${periodLabel}: ${acctTxns.length} transactions, ${currencySymbol()}${total.toFixed(2)} spent.`;
+    }
+  }
+
+  // Tax-deductible
+  if (/tax|deduct|business expense/.test(lower)) {
+    const tagged = txns.filter(t => t.tax === true);
+    const total = tagged.reduce((s, t) => s + t.amount, 0);
+    return `You have <strong>${tagged.length}</strong> tax-tagged transactions totalling <strong>${currencySymbol()}${total.toFixed(2)}</strong>. Export from Settings → Print/Export.`;
+  }
+
+  // Pots
+  if (/pot|envelope|bucket/.test(lower)) {
+    if (!pots.length) return 'No savings pots set up yet. Add some in the Goals tab.';
+    const total = pots.reduce((s, p) => s + p.balance, 0);
+    return `You have <strong>${pots.length}</strong> pot${pots.length > 1 ? 's' : ''} with <strong>${currencySymbol()}${total.toFixed(2)}</strong> total:<br>${pots.map(p => `• ${p.name}: ${currencySymbol()}${p.balance.toFixed(2)}`).join('<br>')}`;
+  }
+
+  // Round-up
+  if (/round.?up/.test(lower)) {
+    const ru = calculateRoundUps('all');
+    return `If you'd rounded up every transaction to the nearest ${currencySymbol()}1, you'd have saved <strong>${currencySymbol()}${ru.saved.toFixed(2)}</strong> across ${ru.count} transactions.`;
+  }
+
+  // CO2
+  if (/co2|carbon|footprint|environment/.test(lower)) {
+    let kg = 0;
+    txns.forEach(t => { kg += t.amount * (co2PerEur[t.category] || 0.3); });
+    return `Estimated total CO2 from your spending: <strong>${kg.toFixed(0)} kg</strong>. EU avg is ~700kg/month per person.`;
+  }
+
+  // Categorisation rules
+  if (/learn|rule|categori[sz]/.test(lower)) {
+    const count = Object.keys(userCategoryRules).length;
+    return `I've learned <strong>${count}</strong> categorisation rule${count !== 1 ? 's' : ''} from your edits. Future imports use these automatically.`;
+  }
+
+  // "Should I" advice
+  if (/should i|can i afford|is it ok/.test(lower)) {
+    const ws = getWeekRange();
+    const wkSpent = txns.filter(t => t.date >= ws.start && t.date <= ws.end).reduce((s, t) => s + t.amount, 0);
+    const remaining = weeklyBudget - wkSpent;
+    const amtMatch = lower.match(/(\d+(?:\.\d+)?)/);
+    if (amtMatch) {
+      const amt = parseFloat(amtMatch[1]);
+      if (amt > remaining) return `❌ That would put you ${currencySymbol()}${(amt - remaining).toFixed(2)} over budget. Better to wait or skip.`;
+      return `✅ Yes — you'd still have ${currencySymbol()}${(remaining - amt).toFixed(2)} left this week.`;
+    }
+    if (remaining < 0) return `You're already over budget by ${currencySymbol()}${Math.abs(remaining).toFixed(2)}. Probably skip non-essentials.`;
+    return `You have ${currencySymbol()}${remaining.toFixed(2)} left of your weekly budget. Reasonable purchases under ${currencySymbol()}${(remaining / 3).toFixed(2)} are safe.`;
+  }
+
+  // Help
+  if (/help|what can|how do/.test(lower)) {
+    return `I can answer ALL kinds of finance questions about your data:<br>• <em>"How much on coffee last month?"</em><br>• <em>"What's my biggest category?"</em><br>• <em>"Cheaper alternatives to Tesco"</em><br>• <em>"Compare this month to last month"</em><br>• <em>"What day do I spend most?"</em><br>• <em>"Forecast end of month"</em><br>• <em>"Should I spend €50?"</em><br>• <em>"Average per week?"</em><br>• <em>"How many times at Starbucks?"</em><br>• <em>"What's my net worth?"</em><br>• <em>"How much in pots?"</em>`;
+  }
+
+  return `I'm not sure how to answer that exactly. Try rephrasing — I understand questions about: spending amounts, categories, merchants, comparisons, forecasts, budgets, accounts, savings, subscriptions, goals, taxes, CO2, and "should I afford" advice. Or type <em>"help"</em> for examples.`;
+}
+
+// ====== v1.10 Receipt photo attach ======
+function attachReceipt(id) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { alert('Photo too large (max 2MB)'); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const t = txns.find(x => x.id === id);
+      if (!t) return;
+      t.receipt = ev.target.result;
+      save();
+      render();
+      showToast('📷 Receipt attached');
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+function viewReceipt(id) {
+  const t = txns.find(x => x.id === id);
+  if (!t || !t.receipt) return;
+  const modal = document.createElement('div');
+  modal.className = 'receipt-modal';
+  modal.onclick = () => modal.remove();
+  modal.innerHTML = `<img src="${t.receipt}" alt="Receipt">`;
+  document.body.appendChild(modal);
+}
+
+// ====== v1.10 Swipe-to-delete (mobile) ======
+function attachSwipeHandlers() {
+  document.querySelectorAll('.transaction-item').forEach(item => {
+    if (item.dataset.swipeAttached) return;
+    item.dataset.swipeAttached = 'true';
+    let startX = 0, currentX = 0, startY = 0, swiping = false;
+    item.addEventListener('touchstart', (e) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      swiping = true;
+    }, { passive: true });
+    item.addEventListener('touchmove', (e) => {
+      if (!swiping) return;
+      currentX = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (Math.abs(dy) > Math.abs(currentX)) { swiping = false; item.style.transform = ''; return; }
+      if (currentX < 0) item.style.transform = `translateX(${Math.max(currentX, -100)}px)`;
+    }, { passive: true });
+    item.addEventListener('touchend', () => {
+      if (currentX < -60) {
+        const delBtn = item.querySelector('.delete-btn');
+        if (delBtn) delBtn.click();
+      }
+      item.style.transform = '';
+      swiping = false;
+      currentX = 0;
+    });
+  });
+}
+
+// ====== v1.10 Touch ripple ======
+function addRipple(e) {
+  const target = e.currentTarget;
+  if (!target.classList.contains('ripple')) target.classList.add('ripple');
+  const rect = target.getBoundingClientRect();
+  const ripple = document.createElement('span');
+  ripple.className = 'ripple-effect';
+  const size = Math.max(rect.width, rect.height);
+  ripple.style.width = ripple.style.height = size + 'px';
+  const x = (e.clientX || rect.left + rect.width / 2) - rect.left - size / 2;
+  const y = (e.clientY || rect.top + rect.height / 2) - rect.top - size / 2;
+  ripple.style.left = x + 'px';
+  ripple.style.top = y + 'px';
+  target.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 600);
+}
+function attachRipples() {
+  document.querySelectorAll('.btn-primary, .numpad-key, .chip, .cat-tile, .toggle-btn, .fab').forEach(el => {
+    if (el.dataset.rippleAttached) return;
+    el.dataset.rippleAttached = 'true';
+    el.addEventListener('click', addRipple);
+  });
+}
+
 // ====== v1.9 Account cards ======
 function renderAccountCards() {
   const grid = document.getElementById('accountCards');
@@ -2398,9 +2967,11 @@ function addAsset() {
   if (!name || !value) return alert('Enter name and value');
   assets.push({ id: Date.now(), name, value });
   save();
+  snapshotNetWorth();
   document.getElementById('assetName').value = '';
   document.getElementById('assetValue').value = '';
   renderNetWorth();
+  renderNetWorthHistory();
   showToast(`✅ Asset "${name}" added`);
 }
 function deleteAsset(id) {
@@ -2415,9 +2986,11 @@ function addLiability() {
   if (!name || !value) return alert('Enter name and amount');
   liabilities.push({ id: Date.now(), name, value });
   save();
+  snapshotNetWorth();
   document.getElementById('liabilityName').value = '';
   document.getElementById('liabilityValue').value = '';
   renderNetWorth();
+  renderNetWorthHistory();
   showToast(`✅ Liability "${name}" added`);
 }
 function deleteLiability(id) {
@@ -2719,6 +3292,9 @@ function renderAllTransactions() {
     const sign = isIn ? '+' : '-';
     const color = isIn ? '#43e97b' : '#fa709a';
     const taxBadge = t.tax ? '<span class="tax-badge">TAX</span>' : '';
+    const receiptBtn = !isIn ? (t.receipt
+      ? `<img class="receipt-thumb" src="${t.receipt}" onclick="event.stopPropagation();viewReceipt(${t.id})" title="View receipt">`
+      : `<button class="delete-btn" onclick="event.stopPropagation();attachReceipt(${t.id})" title="Attach receipt photo" style="font-size:1rem;">📷</button>`) : '';
     return `
     <div class="transaction-item">
       <div class="transaction-info">
@@ -2726,6 +3302,7 @@ function renderAllTransactions() {
         <div class="transaction-meta">${t.category || (isIn ? 'Income' : '—')} • ${t.account || '—'} • ${t.date}</div>
       </div>
       <div style="display: flex; align-items: center; gap: 8px;">
+        ${receiptBtn}
         <div class="transaction-amount" style="color:${color}; font-weight:700;" onclick="${isIn ? '' : `editTxn(${t.id})`}">${sign}${currencySymbol()}${t.amount.toFixed(2)}</div>
         <button class="delete-btn" onclick="${isIn ? `deleteIncome(${t.id})` : `deleteTxn(${t.id})`}">×</button>
       </div>
@@ -2916,6 +3493,11 @@ function render() {
   if (document.getElementById('co2Display')) renderCO2();
   const baseSel = document.getElementById('baseCurrency');
   if (baseSel) baseSel.value = baseCurrency;
+
+  // v1.10 polish
+  if (document.getElementById('netWorthHistoryChart')) renderNetWorthHistory();
+  // Attach swipe + ripple after DOM updates
+  setTimeout(() => { attachSwipeHandlers(); attachRipples(); }, 50);
 
   filterTransactions();
   renderCharts();
