@@ -296,11 +296,11 @@ let chartInstances = {};
 
 const categories = ['Food', 'Transport', 'Shopping', 'Entertainment', 'Utilities', 'Other'];
 const autoCategories = {
-  'Food': /supermarket|restaurant|cafe|coffee|pizza|burger|grocery|tesco|dunnes|lidl|aldi|food/i,
-  'Transport': /taxi|uber|bus|train|petrol|fuel|parking|transport/i,
-  'Shopping': /amazon|shop|mall|store|shopping|clothing/i,
-  'Entertainment': /cinema|movie|netflix|spotify|game|pub|entertainment/i,
-  'Utilities': /electricity|water|gas|broadband|phone|bill|utilities/i,
+  'Food': /supermarket|restaurant|cafe|coffee|pizza|burger|grocery|tesco|dunnes|lidl|aldi|sainsbury|asda|waitrose|dominos|subway|mcdonald|kfc|food|restaurant|eat|lunch|breakfast|dinner|bakery|deli/i,
+  'Transport': /taxi|uber|bus|train|petrol|fuel|parking|transport|bus eireann|irish rail|dart|luas|ryanair|aer lingus|shell|esso|bp|applegreen|turbo|driving|uber|bolt/i,
+  'Shopping': /amazon|shop|mall|store|shopping|clothing|apparel|dress|shoe|fashion|boots|primark|marks|debenhams|penneys|arnotts|brown thomas|ebay|ali|zaful|shein/i,
+  'Entertainment': /cinema|movie|netflix|spotify|game|pub|entertainment|youtube|prime|apple tv|disney|hbo|cinema|tickets|concert|theatre|theater|sports|gaming|steam|twitch/i,
+  'Utilities': /electricity|water|gas|broadband|phone|bill|utilities|eir|vodafone|three|eircom|esb|bord gais|waste|council|internet|mobile|subscriber/i,
 };
 
 function save() {
@@ -343,22 +343,88 @@ function importCSV(event) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (e) => {
-    const lines = e.target.result.split('\n').filter(l => l.trim());
-    let imported = 0;
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(',').map(c => c.trim());
-      const date = cols[0], amount = parseFloat(cols[1].replace(/[€$£¥,]/g, '')), desc = cols[2];
-      if (!date || isNaN(amount) || !desc) continue;
-      let cat = 'Other';
-      for (const [c, regex] of Object.entries(autoCategories)) {
-        if (regex.test(desc)) { cat = c; break; }
+    try {
+      const lines = e.target.result.split('\n').filter(l => l.trim());
+      if (lines.length < 2) { alert('❌ CSV file is empty'); return; }
+
+      // Detect headers by finding columns with keywords
+      const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+      let dateIdx = -1, amountIdx = -1, descIdx = -1;
+
+      // Date column detection
+      for (let i = 0; i < headers.length; i++) {
+        if (/date|posted|transaction|time/i.test(headers[i])) { dateIdx = i; break; }
       }
-      txns.push({ id: Date.now() + Math.random(), date, amount: Math.abs(amount), category: cat, desc });
-      imported++;
+
+      // Amount/debit column detection
+      for (let i = 0; i < headers.length; i++) {
+        if (/amount|debit|withdrawn|spent|charge|fee|\-|expense/i.test(headers[i])) { amountIdx = i; break; }
+      }
+
+      // Description column detection
+      for (let i = 0; i < headers.length; i++) {
+        if (/description|merchant|ref|payee|note|detail|narration/i.test(headers[i])) { descIdx = i; break; }
+      }
+
+      // If columns not found, try alternative keywords
+      if (dateIdx === -1) dateIdx = 0;
+      if (descIdx === -1) descIdx = 1;
+      if (amountIdx === -1) amountIdx = 2;
+
+      let imported = 0;
+      const errors = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+
+        if (cols.length < 3 || !cols[dateIdx]) continue;
+
+        const dateStr = cols[dateIdx];
+        const amountStr = cols[amountIdx];
+        const desc = cols[descIdx];
+
+        // Parse date (handle various formats)
+        let date = null;
+        if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) date = dateStr.split('T')[0]; // ISO format
+        else if (/^\d{2}\/\d{2}\/\d{4}/.test(dateStr)) {
+          const [d, m, y] = dateStr.split('/');
+          date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+        else if (/^\d{2}-\d{2}-\d{4}/.test(dateStr)) {
+          const [d, m, y] = dateStr.split('-');
+          date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+
+        if (!date) { errors.push(`Row ${i}: Invalid date format`); continue; }
+
+        // Parse amount (remove currency symbols, handle negatives)
+        const cleanAmount = amountStr.replace(/[€$£¥,\s]/g, '').replace(/\((\d+)\)/, '-$1');
+        const amount = parseFloat(cleanAmount);
+
+        if (isNaN(amount) || amount === 0) { errors.push(`Row ${i}: Invalid amount`); continue; }
+        if (!desc || desc.length === 0) { errors.push(`Row ${i}: Missing description`); continue; }
+
+        // Auto-categorize
+        let cat = 'Other';
+        for (const [c, regex] of Object.entries(autoCategories)) {
+          if (regex.test(desc)) { cat = c; break; }
+        }
+
+        txns.push({ id: Date.now() + Math.random(), date, amount: Math.abs(amount), category: cat, desc });
+        imported++;
+      }
+
+      save();
+      render();
+
+      let message = `✅ Imported ${imported} transactions`;
+      if (errors.length > 0 && imported === 0) message = `❌ Failed to parse CSV. Please check format.\nTried to use columns:\nDate: ${dateIdx+1}, Amount: ${amountIdx+1}, Description: ${descIdx+1}`;
+      else if (errors.length > 0) message += `\n⚠️ Skipped ${errors.length} rows`;
+
+      alert(message);
+    } catch (err) {
+      alert('❌ Error reading file: ' + err.message);
     }
-    save();
-    render();
-    alert(`✅ Imported ${imported} transactions`);
   };
   reader.readAsText(file);
 }
@@ -366,28 +432,94 @@ function importCSV(event) {
 function handleDrop(event) {
   event.preventDefault();
   const file = event.dataTransfer.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
       const lines = e.target.result.split('\n').filter(l => l.trim());
+      if (lines.length < 2) { alert('❌ CSV file is empty'); return; }
+
+      // Detect headers by finding columns with keywords
+      const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+      let dateIdx = -1, amountIdx = -1, descIdx = -1;
+
+      // Date column detection
+      for (let i = 0; i < headers.length; i++) {
+        if (/date|posted|transaction|time/i.test(headers[i])) { dateIdx = i; break; }
+      }
+
+      // Amount/debit column detection
+      for (let i = 0; i < headers.length; i++) {
+        if (/amount|debit|withdrawn|spent|charge|fee|\-|expense/i.test(headers[i])) { amountIdx = i; break; }
+      }
+
+      // Description column detection
+      for (let i = 0; i < headers.length; i++) {
+        if (/description|merchant|ref|payee|note|detail|narration/i.test(headers[i])) { descIdx = i; break; }
+      }
+
+      // If columns not found, try alternative keywords
+      if (dateIdx === -1) dateIdx = 0;
+      if (descIdx === -1) descIdx = 1;
+      if (amountIdx === -1) amountIdx = 2;
+
       let imported = 0;
+      const errors = [];
+
       for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(',').map(c => c.trim());
-        const date = cols[0], amount = parseFloat(cols[1].replace(/[€$£¥,]/g, '')), desc = cols[2];
-        if (!date || isNaN(amount) || !desc) continue;
+        const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+
+        if (cols.length < 3 || !cols[dateIdx]) continue;
+
+        const dateStr = cols[dateIdx];
+        const amountStr = cols[amountIdx];
+        const desc = cols[descIdx];
+
+        // Parse date (handle various formats)
+        let date = null;
+        if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) date = dateStr.split('T')[0]; // ISO format
+        else if (/^\d{2}\/\d{2}\/\d{4}/.test(dateStr)) {
+          const [d, m, y] = dateStr.split('/');
+          date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+        else if (/^\d{2}-\d{2}-\d{4}/.test(dateStr)) {
+          const [d, m, y] = dateStr.split('-');
+          date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+
+        if (!date) { errors.push(`Row ${i}: Invalid date format`); continue; }
+
+        // Parse amount (remove currency symbols, handle negatives)
+        const cleanAmount = amountStr.replace(/[€$£¥,\s]/g, '').replace(/\((\d+)\)/, '-$1');
+        const amount = parseFloat(cleanAmount);
+
+        if (isNaN(amount) || amount === 0) { errors.push(`Row ${i}: Invalid amount`); continue; }
+        if (!desc || desc.length === 0) { errors.push(`Row ${i}: Missing description`); continue; }
+
+        // Auto-categorize
         let cat = 'Other';
         for (const [c, regex] of Object.entries(autoCategories)) {
           if (regex.test(desc)) { cat = c; break; }
         }
+
         txns.push({ id: Date.now() + Math.random(), date, amount: Math.abs(amount), category: cat, desc });
         imported++;
       }
+
       save();
       render();
-      alert(`✅ Imported ${imported} transactions`);
-    };
-    reader.readAsText(file);
-  }
+
+      let message = `✅ Imported ${imported} transactions`;
+      if (errors.length > 0 && imported === 0) message = `❌ Failed to parse CSV. Please check format.\nTried to use columns:\nDate: ${dateIdx+1}, Amount: ${amountIdx+1}, Description: ${descIdx+1}`;
+      else if (errors.length > 0) message += `\n⚠️ Skipped ${errors.length} rows`;
+
+      alert(message);
+    } catch (err) {
+      alert('❌ Error reading file: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
 }
 
 function loadSampleData() {
