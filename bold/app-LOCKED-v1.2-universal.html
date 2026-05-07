@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Noel - Budget Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.plaid.com/link/v3/stable/link-initialize.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; color: #2c3e50; line-height: 1.6; }
+    header { background: white; border-bottom: 1px solid #e5e7eb; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
+    .logo { font-size: 1.2rem; font-weight: 800; color: #667eea; }
+    nav { background: white; border-bottom: 1px solid #e5e7eb; padding: 0 24px; display: flex; gap: 32px; }
+    nav button { border: none; background: none; padding: 12px 0; color: #8fa3b8; cursor: pointer; border-bottom: 3px solid transparent; font-weight: 600; font-size: 0.9rem; }
+    nav button.active { color: #667eea; border-bottom-color: #667eea; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* Dashboard */
+    .week-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .week-dates { font-size: 0.9rem; color: #8fa3b8; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .stat-card { background: white; padding: 24px; border-radius: 12px; border: 1px solid #e5e7eb; }
+    .stat-card.primary { border-left: 4px solid #667eea; }
+    .stat-card.danger { border-left: 4px solid #e74c3c; }
+    .stat-card.success { border-left: 4px solid #27ae60; }
+    .stat-label { font-size: 0.85rem; color: #8fa3b8; text-transform: uppercase; margin-bottom: 8px; }
+    .stat-value { font-size: 2rem; font-weight: 800; color: #2c3e50; }
+
+    /* Forms */
+    .form-card { background: white; padding: 24px; border-radius: 12px; border: 1px solid #e5e7eb; margin-bottom: 24px; }
+    .form-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 16px; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group label { font-size: 0.8rem; color: #8fa3b8; margin-bottom: 6px; font-weight: 600; }
+    .form-group input, .form-group select { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.95rem; font-family: inherit; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+
+    .btn { padding: 12px 24px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.95rem; transition: all 0.2s; }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-primary:hover { background: #5568d3; transform: translateY(-2px); }
+    .btn-secondary { background: white; border: 2px solid #667eea; color: #667eea; }
+
+    /* Toggle Buttons */
+    .toggle-group { display: flex; gap: 8px; margin-bottom: 16px; }
+    .toggle-btn { flex: 1; padding: 10px; border: 2px solid #e5e7eb; background: white; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    .toggle-btn.active { background: #667eea; color: white; border-color: #667eea; }
+
+    /* Category Budgets */
+    .category-item { background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 12px; }
+    .category-item.over { background: #fee; }
+    .category-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .category-name { font-weight: 700; color: #2c3e50; }
+    .category-spent { font-weight: 800; color: #e74c3c; }
+    .progress-bar { width: 100%; background: #e5e7eb; height: 8px; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+    .progress-fill { height: 100%; background: #667eea; }
+    .category-item.over .progress-fill { background: #e74c3c; }
+    .category-info { display: flex; justify-content: space-between; font-size: 0.85rem; color: #8fa3b8; }
+
+    /* Transactions */
+    .transaction-item { padding: 12px 16px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+    .transaction-item:hover { background: #f8f9fa; }
+    .transaction-info { flex: 1; }
+    .transaction-desc { font-weight: 600; color: #2c3e50; }
+    .transaction-meta { font-size: 0.8rem; color: #8fa3b8; margin-top: 4px; }
+    .transaction-amount { font-weight: 800; color: #667eea; font-size: 1.1rem; cursor: pointer; }
+    .transaction-amount:hover { color: #5568d3; }
+    .delete-btn { background: none; border: none; color: #ccc; cursor: pointer; font-size: 1.2rem; }
+    .delete-btn:hover { color: #e74c3c; }
+
+    /* Chart */
+    .chart-card { background: white; padding: 24px; border-radius: 12px; border: 1px solid #e5e7eb; margin-bottom: 24px; }
+    .chart-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
+    .chart-wrapper { position: relative; height: 300px; }
+
+    @media (max-width: 768px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+      nav { gap: 12px; }
+      nav button { padding: 12px 8px; font-size: 0.8rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">💰 Noel</div>
+  <button class="btn btn-primary" style="padding: 8px 16px; font-size: 0.9rem;" onclick="switchSection(null, 'daily-log')">Quick Add</button>
+</header>
+
+<nav>
+  <button class="nav-btn active" onclick="switchSection(event, 'dashboard')">Dashboard</button>
+  <button class="nav-btn" onclick="switchSection(event, 'daily-log')">Add Spending</button>
+  <button class="nav-btn" onclick="switchSection(event, 'budgets')">Budgets</button>
+  <button class="nav-btn" onclick="switchSection(event, 'settings')">Settings</button>
+</nav>
+
+<div class="container">
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="section active">
+    <div class="week-header">
+      <h2>This week spend</h2>
+      <div class="week-dates" id="weekRange"></div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card primary">
+        <div class="stat-label">Weekly Target</div>
+        <div class="stat-value" id="weeklyTarget">€1,725</div>
+      </div>
+      <div class="stat-card danger">
+        <div class="stat-label">Spent This Week</div>
+        <div class="stat-value" id="weekSpent">€0</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-label">Income</div>
+        <div class="stat-value" id="incomeThisWeek">€0</div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <h3>📋 Category Spending</h3>
+      <div id="categoryBudgetDisplay"></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>📊 Spending by Category</h3>
+      <div class="chart-wrapper">
+        <canvas id="categoryChart"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>📈 5-Week Trend</h3>
+      <div class="chart-wrapper">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <h3>🔮 Next Month Forecast</h3>
+      <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Based on last 6 months of spending</p>
+      <div id="forecastDisplay"></div>
+    </div>
+
+    <div class="form-card">
+      <h3>📝 Recent Transactions</h3>
+      <div id="filteredTransactionsList"></div>
+    </div>
+  </div>
+
+  <!-- Add Spending (Daily Log) -->
+  <div id="daily-log" class="section">
+    <div class="form-card">
+      <h3>➕ Quick Add (5 seconds)</h3>
+      <div class="toggle-group">
+        <button class="toggle-btn active" id="toggleOut" onclick="setTransactionType('out')">💸 Money Out</button>
+        <button class="toggle-btn" id="toggleIn" onclick="setTransactionType('in')">💰 Money In</button>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="logDate">
+        </div>
+        <div class="form-group">
+          <label>Amount (€)</label>
+          <input type="number" id="logAmount" placeholder="0.00" step="0.01">
+        </div>
+        <div class="form-group">
+          <label>Account</label>
+          <select id="logAccount">
+            <option>AIB Personal</option>
+            <option>AIB Business</option>
+            <option>Revolut</option>
+            <option>Credit Union</option>
+            <option>Cash</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Category</label>
+          <select id="logCategory">
+            <option>Groceries</option>
+            <option>Fuel & Transport</option>
+            <option>Utilities & Bills</option>
+            <option>Subscriptions</option>
+            <option>Eating Out & Coffee</option>
+            <option>Kids & Family</option>
+            <option>Health & Fitness</option>
+            <option>Personal & Discretionary</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" id="logDesc" placeholder="e.g. Tesco Supermarket">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="addDailyLog()" style="width: 100%; margin-top: 16px;">Log Transaction</button>
+    </div>
+  </div>
+
+  <!-- Budgets -->
+  <div id="budgets" class="section">
+    <div class="form-card">
+      <h3>📋 Set Your Budget</h3>
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label>Weekly Budget Target (€)</label>
+        <input type="number" id="weeklyBudgetInput" placeholder="1725" step="0.01">
+      </div>
+      <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Set monthly budget limit for each category</p>
+      <div id="categoryBudgetsForm"></div>
+      <button class="btn btn-primary" onclick="saveBudgets()" style="width: 100%; margin-top: 16px;">Save All Budgets</button>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div id="settings" class="section">
+    <div class="form-card">
+      <h3>🔗 Connect Your Bank (Plaid)</h3>
+      <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Link your Irish bank account securely via Plaid</p>
+      <button class="btn btn-primary" id="plaidButton" onclick="openPlaidLink()" style="width: 100%; margin-bottom: 12px;">🏦 Connect Bank Account</button>
+      <div id="bankStatus" style="font-size: 0.9rem; color: #8fa3b8; margin-top: 12px;"></div>
+      <p style="color: #8fa3b8; margin-top: 12px; font-size: 0.85rem;"><strong>Note:</strong> Add your Plaid Client ID in settings.js to enable live connections</p>
+    </div>
+
+    <div class="form-card">
+      <h3>📥 Import AIB CSV</h3>
+      <p style="color: #8fa3b8; margin-bottom: 12px; font-size: 0.9rem;">Upload your AIB transaction export</p>
+      <input type="file" id="csvFile" accept=".csv" onchange="importCSV(event)" style="display: none;">
+      <button class="btn btn-primary" onclick="document.getElementById('csvFile').click()" style="width: 100%;">Choose CSV File</button>
+    </div>
+
+    <div class="form-card">
+      <h3>📊 Data</h3>
+      <button class="btn btn-primary" onclick="loadSampleData()" style="width: 100%; margin-bottom: 12px;">Load Sample Data</button>
+      <button class="btn btn-primary" style="background: #e74c3c; width: 100%;" onclick="clearAllData()">Clear All Data</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let txns = JSON.parse(localStorage.getItem('txns') || '[]');
+let income = JSON.parse(localStorage.getItem('income') || '[]');
+let catBudgets = JSON.parse(localStorage.getItem('catBudgets') || '{}');
+let weeklyBudget = parseFloat(localStorage.getItem('weeklyBudget') || '1725');
+let transactionType = 'out';
+
+const categories = ['Groceries', 'Fuel & Transport', 'Utilities & Bills', 'Subscriptions', 'Eating Out & Coffee', 'Kids & Family', 'Health & Fitness', 'Personal & Discretionary'];
+const accounts = ['AIB Personal', 'AIB Business', 'Revolut', 'Credit Union', 'Cash'];
+
+function save() {
+  localStorage.setItem('txns', JSON.stringify(txns));
+  localStorage.setItem('income', JSON.stringify(income));
+  localStorage.setItem('catBudgets', JSON.stringify(catBudgets));
+  localStorage.setItem('weeklyBudget', weeklyBudget);
+}
+
+function switchSection(event, sectionId) {
+  if (event) event.preventDefault();
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(sectionId).classList.add('active');
+  if (event?.target) event.target.classList.add('active');
+  render();
+  window.scrollTo(0, 0);
+}
+
+function setTransactionType(type) {
+  transactionType = type;
+  document.getElementById('toggleOut').classList.toggle('active', type === 'out');
+  document.getElementById('toggleIn').classList.toggle('active', type === 'in');
+}
+
+function addDailyLog() {
+  const date = document.getElementById('logDate').value || new Date().toISOString().split('T')[0];
+  const amount = parseFloat(document.getElementById('logAmount').value);
+  const cat = document.getElementById('logCategory').value;
+  const desc = document.getElementById('logDesc').value;
+  const account = document.getElementById('logAccount').value;
+  if (!amount || amount <= 0) return alert('Enter a valid amount');
+
+  if (transactionType === 'in') {
+    income.push({ date, amount, desc, account, id: Date.now() });
+  } else {
+    txns.push({ date, amount, category: cat, desc, account, id: Date.now() });
+  }
+  save();
+  document.getElementById('logAmount').value = '';
+  document.getElementById('logDesc').value = '';
+  alert('✅ Transaction logged!');
+  render();
+}
+
+function editTxn(id) {
+  const txn = txns.find(t => t.id === id);
+  if (!txn) return;
+  const newAmount = prompt(`Edit amount for "${txn.desc}":\n\nCurrent: €${txn.amount.toFixed(2)}`, txn.amount.toFixed(2));
+  if (newAmount !== null && newAmount !== '') {
+    const amount = parseFloat(newAmount);
+    if (amount > 0) {
+      txn.amount = amount;
+      save();
+      render();
+      alert('✅ Amount updated!');
+    }
+  }
+}
+
+function deleteTxn(id) {
+  if (confirm('Delete this transaction?')) {
+    txns = txns.filter(t => t.id !== id);
+    save();
+    render();
+  }
+}
+
+function saveBudgets() {
+  weeklyBudget = parseFloat(document.getElementById('weeklyBudgetInput').value) || 1725;
+  categories.forEach(cat => {
+    const input = document.getElementById(`budget-${cat}`);
+    if (input?.value) catBudgets[cat] = parseFloat(input.value);
+  });
+  save();
+  alert('✅ Budgets saved!');
+  render();
+}
+
+function loadSampleData() {
+  txns = [
+    { id: 1, date: '2026-05-06', amount: 52.50, category: 'Groceries', desc: 'Tesco Supermarket', account: 'AIB Personal' },
+    { id: 2, date: '2026-05-05', amount: 18.99, category: 'Fuel & Transport', desc: 'Taxi - Dublin', account: 'Cash' },
+    { id: 3, date: '2026-05-05', amount: 89.50, category: 'Personal & Discretionary', desc: 'Zara Online', account: 'AIB Personal' },
+    { id: 4, date: '2026-05-04', amount: 5.50, category: 'Eating Out & Coffee', desc: 'Starbucks', account: 'AIB Personal' },
+    { id: 5, date: '2026-05-03', amount: 35.00, category: 'Groceries', desc: 'Dunnes Stores', account: 'AIB Personal' },
+    { id: 6, date: '2026-05-02', amount: 120.00, category: 'Eating Out & Coffee', desc: 'Restaurant', account: 'Revolut' },
+  ];
+  income = [
+    { id: 1, date: '2026-05-01', amount: 3000, desc: 'Salary', account: 'AIB Personal' },
+  ];
+  catBudgets = { 'Groceries': 180, 'Fuel & Transport': 80, 'Utilities & Bills': 95, 'Subscriptions': 25, 'Eating Out & Coffee': 60, 'Kids & Family': 70, 'Health & Fitness': 25, 'Personal & Discretionary': 40 };
+  weeklyBudget = 1725;
+  save();
+  render();
+  alert('✅ Demo data loaded!');
+}
+
+const csvAutoCategories = {
+  'Groceries': /supermarket|tesco|dunnes|lidl|aldi|spar|centra|supervalu|grocer|sainsbury|asda|morrison|waitrose|m&s food|marks.*spencer|whole.?foods|trader.?joe|kroger|safeway|walmart.*grocery|carrefour|albert.?heijn/i,
+  'Fuel & Transport': /taxi|uber|lyft|bolt|free.?now|bus|train|metro|tube|petrol|fuel|gas station|parking|ryanair|aer lingus|luas|dart|irish.?rail|circle.?k|applegreen|maxol|topaz|texaco|shell|esso|bp|easyjet|jet2|wizz.?air|british.?airways|delta|united|lufthansa|amtrak|tfl|oyster|nationalrail|trainline|omio|trivago|booking\.com|airbnb|hotels\.com|expedia/i,
+  'Utilities & Bills': /electricity|water|gas bill|broadband|phone|mobile|telecom|bill|esb|electric ireland|vodafone|eir|sky|virgin|three|tesco mobile|gomo|bord.?gais|flogas|prepay|prepaid|insurance|axa|aviva|allianz|zurich/i,
+  'Subscriptions': /netflix|spotify|disney|disney\+|prime video|apple\.com|apple music|itunes|google.*play|google.*storage|microsoft|office 365|adobe|dropbox|icloud|youtube|twitch|hulu|hbo|paramount|patreon|substack|notion|figma|canva|github|chatgpt|openai|anthropic|claude|midjourney|linkedin|nytimes|economist|subscription/i,
+  'Eating Out & Coffee': /restaurant|cafe|coffee|starbucks|costa|nero|insomnia|butlers|mcdonald|burger.?king|pizza|deli|domino|kfc|subway|nando|wagamama|five.?guys|chipotle|pret|leon|greggs|wetherspoon|wagamama|tim.?horton|deliveroo|just.?eat|uber.?eats|takeaway|dine|bistro|pub|bar|brewery|wine|gastropub/i,
+  'Kids & Family': /school|creche|toy|kids|child|smyths|mothercare|babies|early.?learning|gymboree|tots|nursery|playschool/i,
+  'Health & Fitness': /gym|pharmacy|doctor|medical|fitness|boots|hospital|clinic|dental|optician|specsavers|vision.?express|cvs|walgreens|holland.*barrett|mcCabes|dunaway|medicare|insurance.*health|peloton|crossfit|yoga|pilates/i,
+  'Personal & Discretionary': /amazon|shop|store|clothing|primark|zara|h&m|penneys|next |asos|river.?island|topshop|debenhams|dunnes stores|argos|currys|harvey.?norman|ikea|home.?store|ebay|etsy|aliexpress|shein|temu|nike|adidas|sports.?direct|jd.?sports|footlocker|brown.?thomas|arnotts|amex|american.?express|visa.?payment|mastercard.*payment/i,
+};
+
+// Universal CSV line parser — handles any delimiter and quoted fields
+function parseCSVLine(line, delim = ',') {
+  const cols = [];
+  let curr = '', inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQuotes && line[i+1] === '"') { curr += '"'; i++; }  // escaped quote
+      else inQuotes = !inQuotes;
+    } else if (c === delim && !inQuotes) { cols.push(curr.trim()); curr = ''; }
+    else curr += c;
+  }
+  cols.push(curr.trim());
+  return cols;
+}
+
+// Detect delimiter by counting candidates in first non-empty lines
+function detectDelimiter(lines) {
+  const candidates = [',', ';', '\t', '|'];
+  let best = ',', bestScore = 0;
+  const sample = lines.slice(0, Math.min(10, lines.length));
+  for (const d of candidates) {
+    const counts = sample.map(l => (l.match(new RegExp('\\' + d, 'g')) || []).length);
+    const avg = counts.reduce((a,b)=>a+b,0) / counts.length;
+    if (avg > bestScore) { bestScore = avg; best = d; }
+  }
+  return best;
+}
+
+// Parse any common date format
+function parseAnyDate(s) {
+  if (!s) return null;
+  s = s.replace(/"/g, '').trim();
+  // Strip time component
+  s = s.split(/[T ]/)[0];
+
+  // YYYY-MM-DD or YYYY/MM/DD
+  let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/);
+  if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+
+  // DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY (European default)
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (m) {
+    const a = parseInt(m[1]), b = parseInt(m[2]);
+    // If first part > 12, it's definitely day-first. If second > 12, month-first (US).
+    if (a > 12) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    if (b > 12) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+    // Ambiguous — assume day-first (Irish/UK/EU default)
+    return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  }
+
+  // DD/MM/YY (2-digit year)
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})$/);
+  if (m) {
+    const yy = parseInt(m[3]);
+    const yyyy = yy < 50 ? 2000 + yy : 1900 + yy;
+    return `${yyyy}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  }
+
+  // "5 May 2026" or "5-May-2026"
+  const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  m = s.match(/^(\d{1,2})[\s\-]+([A-Za-z]{3,})[\s\-]+(\d{2,4})$/);
+  if (m) {
+    const mn = months[m[2].toLowerCase().slice(0,3)];
+    if (mn) {
+      let y = parseInt(m[3]);
+      if (y < 100) y = y < 50 ? 2000 + y : 1900 + y;
+      return `${y}-${String(mn).padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    }
+  }
+
+  // "May 5, 2026" / "May 5 2026"
+  m = s.match(/^([A-Za-z]{3,})\s+(\d{1,2}),?\s+(\d{2,4})$/);
+  if (m) {
+    const mn = months[m[1].toLowerCase().slice(0,3)];
+    if (mn) {
+      let y = parseInt(m[3]);
+      if (y < 100) y = y < 50 ? 2000 + y : 1900 + y;
+      return `${y}-${String(mn).padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+    }
+  }
+
+  // Last resort — try Date.parse
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+
+  return null;
+}
+
+// Parse number handling EU/US formats, parentheses, DR/CR suffixes, currency symbols
+function parseAmount(raw) {
+  if (raw === null || raw === undefined) return null;
+  let s = String(raw).replace(/"/g, '').trim();
+  if (!s) return null;
+
+  let isNegative = false;
+  // Parentheses notation: (100) = -100
+  if (/^\(.*\)$/.test(s)) { isNegative = true; s = s.slice(1, -1); }
+  // Trailing minus: 100- = -100
+  if (/-$/.test(s)) { isNegative = true; s = s.slice(0, -1); }
+  // DR/CR suffixes
+  if (/\s*DR\s*$/i.test(s)) { isNegative = true; s = s.replace(/\s*DR\s*$/i, ''); }
+  if (/\s*CR\s*$/i.test(s)) { s = s.replace(/\s*CR\s*$/i, ''); }
+  // Leading minus
+  if (/^-/.test(s)) { isNegative = true; s = s.slice(1); }
+  // Strip currency symbols & spaces
+  s = s.replace(/[€$£¥₹\s]/g, '').replace(/[A-Z]{3}$/i, '').trim();
+  if (!s) return null;
+
+  // Detect EU vs US format
+  // EU: 1.234,56 — comma is decimal, dot is thousand
+  // US: 1,234.56 — dot is decimal, comma is thousand
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma > lastDot) {
+    // EU: comma is decimal
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    // US or no decimal: strip commas
+    s = s.replace(/,/g, '');
+  }
+
+  const n = parseFloat(s);
+  if (isNaN(n)) return null;
+  return isNegative ? -n : n;
+}
+
+// Comprehensive column detection across known bank formats
+function detectColumns(header) {
+  const h = header.map(x => x.toLowerCase().trim());
+  // For short patterns (≤3 chars or ambiguous), require word boundary to avoid false matches
+  // (e.g. 'in' must not match 'spending category')
+  const findOne = (patterns) => {
+    for (const p of patterns) {
+      const useWordBoundary = p.length <= 4 || /^(in|out|net|gross)$/.test(p);
+      const idx = useWordBoundary
+        ? h.findIndex(x => new RegExp('(^|[^a-z])' + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z])').test(x))
+        : h.findIndex(x => x === p || x.includes(p));
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  };
+  return {
+    date: findOne([
+      'posted transactions date', 'posted transaction date', 'completed date',
+      'transaction date', 'started date', 'posted date', 'value date',
+      'booking date', 'date completed', 'finished on', 'created on',
+      'date posted', 'transaction time', 'date'
+    ]),
+    desc: findOne([
+      'description1', 'description', 'details', 'narrative', 'merchant',
+      'counter party', 'partner name', 'payee', 'name', 'reference',
+      'memo', 'subject', 'transaction details', 'particulars'
+    ]),
+    debit: findOne([
+      'debit amount', 'debit', 'withdrawal', 'withdrawals',
+      'money out', 'paid out', 'spent', 'expense'
+    ]),
+    credit: findOne([
+      'credit amount', 'credit', 'deposit', 'deposits',
+      'money in', 'paid in', 'received', 'income'
+    ]),
+    amount: findOne([
+      'transaction amount', 'amount (eur)', 'amount (gbp)', 'amount (usd)',
+      'local amount', 'amount', 'value', 'gross', 'net'
+    ]),
+    type: findOne(['transaction type', 'direction', 'dr/cr', 'type']),
+    category: findOne(['spending category', 'category']),
+  };
+}
+
+// Find the actual header row (skips preamble rows banks add)
+function findHeaderRow(lines, delim) {
+  for (let i = 0; i < Math.min(15, lines.length); i++) {
+    const cols = parseCSVLine(lines[i], delim);
+    if (cols.length < 3) continue;
+    const det = detectColumns(cols);
+    const hasDate = det.date !== -1;
+    const hasMoney = det.debit !== -1 || det.credit !== -1 || det.amount !== -1;
+    if (hasDate && hasMoney) return i;
+  }
+  return 0; // fallback to first line
+}
+
+function importCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      // Strip BOM, split lines, drop empties
+      let text = e.target.result.replace(/^﻿/, '');
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) return alert('❌ CSV is empty');
+
+      // Auto-detect delimiter and header row
+      const delim = detectDelimiter(lines);
+      const headerIdx = findHeaderRow(lines, delim);
+      const header = parseCSVLine(lines[headerIdx], delim);
+      const cols = detectColumns(header);
+
+      if (cols.date === -1 || cols.desc === -1 || (cols.debit === -1 && cols.credit === -1 && cols.amount === -1)) {
+        return alert('❌ Could not detect format.\n\nNeed: Date, Description, and (Debit/Credit OR Amount).\n\nDelimiter: "' + delim + '"\nHeader row: ' + (headerIdx + 1) + '\nHeaders found:\n' + header.join(' | '));
+      }
+
+      let imported = 0, skipped = 0, skipReasons = {};
+      const log = (reason) => { skipReasons[reason] = (skipReasons[reason] || 0) + 1; skipped++; };
+
+      for (let i = headerIdx + 1; i < lines.length; i++) {
+        const parts = parseCSVLine(lines[i], delim);
+        if (parts.length < 2) { log('too few columns'); continue; }
+
+        // Skip footer rows (totals, balances, etc.)
+        const lineLower = lines[i].toLowerCase();
+        if (/^(total|opening|closing|balance|sum)/i.test(parts[0]) || /\b(end of statement|page \d)/i.test(lineLower)) { log('footer row'); continue; }
+
+        const date = parseAnyDate(parts[cols.date] || '');
+        const desc = (parts[cols.desc] || '').replace(/"/g, '').trim();
+        if (!date) { log('bad date'); continue; }
+        if (!desc) { log('no description'); continue; }
+
+        let amountVal = 0, isIncome = false;
+        if (cols.debit !== -1 || cols.credit !== -1) {
+          // Two-column format (AIB, BOI, PTSB, HSBC, Santander)
+          const debit  = parseAmount(parts[cols.debit]  || '') || 0;
+          const credit = parseAmount(parts[cols.credit] || '') || 0;
+          if (Math.abs(debit) > 0)       { amountVal = Math.abs(debit);  isIncome = false; }
+          else if (Math.abs(credit) > 0) { amountVal = Math.abs(credit); isIncome = true;  }
+        } else {
+          // Single amount column — sign determines direction
+          // Convention: negative = spending (Revolut, Wise, Monzo, Starling, AMEX)
+          const raw = parseAmount(parts[cols.amount] || '');
+          if (raw === null || raw === 0) { log('zero/no amount'); continue; }
+
+          // Use Type column hint if present
+          let typeHint = (cols.type !== -1 ? (parts[cols.type] || '') : '').toLowerCase();
+          amountVal = Math.abs(raw);
+          if (raw < 0) isIncome = false;
+          else if (raw > 0) {
+            // Positive — could be income or spending depending on convention
+            // AMEX/credit cards: positive = charge (spending). Bank statements: positive = credit.
+            // If type column hints "payment"/"refund"/"credit" → income; "purchase"/"debit" → spending
+            if (/payment|refund|credit|deposit|salary|received/i.test(typeHint)) isIncome = true;
+            else if (/purchase|debit|charge|withdrawal|fee/i.test(typeHint)) isIncome = false;
+            else isIncome = true; // default: positive = money in
+          }
+        }
+        if (!amountVal) { log('zero amount'); continue; }
+
+        // Use category from CSV if present, otherwise auto-categorize
+        let cat = 'Personal & Discretionary';
+        if (cols.category !== -1 && parts[cols.category]) {
+          const csvCat = parts[cols.category].toLowerCase();
+          // Map common CSV categories to our buckets
+          if (/grocer|food|supermarket/.test(csvCat)) cat = 'Groceries';
+          else if (/transport|fuel|petrol|taxi|travel/.test(csvCat)) cat = 'Fuel & Transport';
+          else if (/util|bill/.test(csvCat)) cat = 'Utilities & Bills';
+          else if (/subscript|entertain/.test(csvCat)) cat = 'Subscriptions';
+          else if (/restaurant|coffee|eating/.test(csvCat)) cat = 'Eating Out & Coffee';
+          else if (/health|fitness|medical/.test(csvCat)) cat = 'Health & Fitness';
+          else if (/kid|child|family/.test(csvCat)) cat = 'Kids & Family';
+        }
+        // Auto-categorize from description
+        for (const [c, regex] of Object.entries(csvAutoCategories)) {
+          if (regex.test(desc)) { cat = c; break; }
+        }
+
+        const id = Date.now() + Math.random();
+        if (isIncome) {
+          income.push({ id, date, amount: amountVal, desc, account: 'AIB Personal' });
+        } else {
+          txns.push({ id, date, amount: amountVal, category: cat, desc, account: 'AIB Personal' });
+        }
+        imported++;
+      }
+
+      if (imported === 0) {
+        const reasons = Object.entries(skipReasons).map(([r,c]) => `  ${r}: ${c}`).join('\n');
+        return alert(`❌ Could not import any transactions.\n\nDelimiter: "${delim}"\nHeader row: ${headerIdx + 1}\nDate col: ${header[cols.date] || 'NOT FOUND'}\nDesc col: ${header[cols.desc] || 'NOT FOUND'}\nDebit col: ${header[cols.debit] || 'n/a'}\nCredit col: ${header[cols.credit] || 'n/a'}\nAmount col: ${header[cols.amount] || 'n/a'}\n\nSkipped (${skipped}):\n${reasons}`);
+      }
+      save();
+      render();
+      alert(`✅ Imported ${imported} transactions${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
+    } catch (err) {
+      alert('❌ Error: ' + err.message + '\n\n' + err.stack);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function clearAllData() {
+  if (confirm('Delete all data?')) {
+    txns = []; income = []; catBudgets = {}; weeklyBudget = 1725;
+    save();
+    render();
+    alert('✅ Data cleared');
+  }
+}
+
+const BACKEND_URL = 'http://localhost:3001'; // Change to your deployed backend URL
+let plaidHandler = null;
+
+function initPlaidLink() {
+  fetch(`${BACKEND_URL}/api/plaid/create-link-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.link_token) {
+      plaidHandler = Plaid.create({
+        token: data.link_token,
+        onSuccess: (publicToken) => {
+          console.log('✅ Bank connected');
+          exchangeToken(publicToken);
+        },
+        onExit: (err) => {
+          if (err) console.log('User exited Plaid:', err);
+        }
+      });
+    } else {
+      console.log('⚠️ Backend not running. Using demo mode.');
+    }
+  })
+  .catch(err => {
+    console.log('Backend error (demo mode):', err);
+  });
+}
+
+function openPlaidLink() {
+  if (plaidHandler) {
+    plaidHandler.open();
+  } else {
+    alert('🏦 Demo Mode\n\nBackend not connected. Click OK for simulated bank sync.');
+    simulateBankSync();
+  }
+}
+
+function exchangeToken(publicToken) {
+  fetch(`${BACKEND_URL}/api/plaid/exchange-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ public_token: publicToken })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.access_token) {
+      console.log('✅ Bank connected! Fetching transactions...');
+      fetchBankTransactions(data.item_id);
+    }
+  })
+  .catch(err => {
+    console.error('Exchange error:', err);
+    alert('Error connecting bank. Using demo data.');
+    simulateBankSync();
+  });
+}
+
+function fetchBankTransactions(itemId) {
+  fetch(`${BACKEND_URL}/api/plaid/transactions/${itemId}`)
+  .then(res => res.json())
+  .then(data => {
+    if (data.transactions) {
+      data.transactions.forEach((t, i) => {
+        if (!txns.find(x => x.desc === t.desc && x.date === t.date)) {
+          txns.push({ ...t, id: Date.now() + i });
+        }
+      });
+      save();
+      render();
+      alert(`✅ Imported ${data.transactions.length} transactions!`);
+    }
+  })
+  .catch(err => {
+    console.error('Fetch transactions error:', err);
+    alert('Could not fetch transactions. Make sure backend is running.');
+  });
+}
+
+function simulateBankSync() {
+  const testTransactions = [
+    { date: '2026-05-06', amount: 52.50, category: 'Groceries', desc: 'Tesco', account: 'AIB Personal' },
+    { date: '2026-05-05', amount: 18.99, category: 'Fuel & Transport', desc: 'Taxi', account: 'Cash' },
+  ];
+  let imported = 0;
+  testTransactions.forEach(t => {
+    if (!txns.find(x => x.desc === t.desc && x.date === t.date)) {
+      txns.push({ id: Date.now() + Math.random(), ...t });
+      imported++;
+    }
+  });
+  save();
+  render();
+  document.getElementById('bankStatus').innerHTML = `✅ Connected! Synced ${imported} transactions from Tink/TrueLayer.`;
+  document.getElementById('connectTinkBtn').textContent = '✅ Connected';
+  document.getElementById('connectTinkBtn').disabled = true;
+}
+
+function sumByCategory(cat) {
+  return txns.filter(t => t.category === cat).reduce((sum, t) => sum + t.amount, 0);
+}
+
+function sumByDateRange(arr, field = 'amount', startDate, endDate) {
+  return arr.filter(item => item.date >= startDate && item.date <= endDate).reduce((sum, item) => sum + (item[field] || 0), 0);
+}
+
+function getWeekRange() {
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const start = new Date(today);
+  start.setDate(today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] };
+}
+
+function filterTransactions() {
+  let filtered = txns.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 20);
+  const html = filtered.length ? filtered.map(t => `
+    <div class="transaction-item">
+      <div class="transaction-info">
+        <div class="transaction-desc">${t.desc}</div>
+        <div class="transaction-meta">${t.category} • ${t.account} • ${t.date}</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="transaction-amount" onclick="editTxn(${t.id})">€${t.amount.toFixed(2)}</div>
+        <button class="delete-btn" onclick="deleteTxn(${t.id})">×</button>
+      </div>
+    </div>
+  `).join('') : '<div style="text-align: center; color: #8fa3b8; padding: 20px;">No transactions yet</div>';
+  document.getElementById('filteredTransactionsList').innerHTML = html;
+}
+
+let _chartInstances = {};
+function renderCharts() {
+  const categorySpending = {};
+  categories.forEach(cat => categorySpending[cat] = sumByCategory(cat));
+
+  const canvas = document.getElementById('categoryChart');
+  if (canvas && _chartInstances.category) _chartInstances.category.destroy();
+  if (canvas) {
+    _chartInstances.category = new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels: categories,
+        datasets: [{
+          data: Object.values(categorySpending),
+          backgroundColor: ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe', '#43e97b', '#fa709a', '#fee140'],
+          borderColor: 'white',
+          borderWidth: 2
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+    });
+  }
+
+  // 5-week trend
+  const trendCanvas = document.getElementById('trendChart');
+  if (trendCanvas && _chartInstances.trend) _chartInstances.trend.destroy();
+  if (trendCanvas) {
+    const labels = [];
+    const data = [];
+    for (let i = 4; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - (7 * i));
+      const weekStart = new Date(d);
+      weekStart.setDate(d.getDate() - d.getDay() + 1);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      const sStart = weekStart.toISOString().split('T')[0];
+      const sEnd = weekEnd.toISOString().split('T')[0];
+      labels.push('Week ' + (5 - i));
+      data.push(sumByDateRange(txns, 'amount', sStart, sEnd));
+    }
+    _chartInstances.trend = new Chart(trendCanvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Weekly Spending',
+          data,
+          borderColor: '#667eea',
+          backgroundColor: 'rgba(102, 126, 234, 0.1)',
+          tension: 0.4,
+          fill: true,
+          pointRadius: 5,
+          pointBackgroundColor: '#667eea'
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { padding: 16 } } }, scales: { y: { beginAtZero: true } } }
+    });
+  }
+}
+
+function render() {
+  const { start, end } = getWeekRange();
+  document.getElementById('weekRange').textContent = `${start} — ${end}`;
+
+  const weekSpent = sumByDateRange(txns, 'amount', start, end);
+  const weekIncome = sumByDateRange(income, 'amount', start, end);
+
+  document.getElementById('weeklyTarget').textContent = `€${weeklyBudget.toFixed(0)}`;
+  document.getElementById('weekSpent').textContent = `€${weekSpent.toFixed(2)}`;
+  document.getElementById('incomeThisWeek').textContent = `€${weekIncome.toFixed(2)}`;
+
+  // Category budgets form
+  let budgetForm = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">';
+  categories.forEach(cat => {
+    budgetForm += `<div class="form-group"><label>${cat}</label><input type="number" id="budget-${cat}" value="${catBudgets[cat] || ''}" placeholder="€0.00" step="0.01"></div>`;
+  });
+  budgetForm += '</div>';
+  document.getElementById('categoryBudgetsForm').innerHTML = budgetForm;
+  document.getElementById('weeklyBudgetInput').value = weeklyBudget;
+
+  // Category budget display
+  let budgetDisplay = '';
+  categories.forEach(cat => {
+    const spent = sumByCategory(cat);
+    const budget = catBudgets[cat] || 0;
+    const isOver = budget > 0 && spent > budget;
+    const percentUsed = budget > 0 ? (spent / budget) * 100 : 0;
+
+    if (budget > 0) {
+      budgetDisplay += `
+        <div class="category-item ${isOver ? 'over' : ''}">
+          <div class="category-header">
+            <span class="category-name">${cat}</span>
+            <span class="category-spent">€${spent.toFixed(2)}</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: ${Math.min(percentUsed, 100)}%;"></div>
+          </div>
+          <div class="category-info">
+            <span>${percentUsed.toFixed(0)}% of €${budget.toFixed(2)}</span>
+            <span>${isOver ? `⚠️ €${(spent - budget).toFixed(2)} over` : `✅ €${(budget - spent).toFixed(2)} left`}</span>
+          </div>
+        </div>
+      `;
+    }
+  });
+  if (!budgetDisplay) budgetDisplay = '<p style="color: #8fa3b8; text-align: center; padding: 20px;">Set budgets to track spending</p>';
+  document.getElementById('categoryBudgetDisplay').innerHTML = budgetDisplay;
+
+  document.getElementById('logDate').value = new Date().toISOString().split('T')[0];
+  filterTransactions();
+  renderCharts();
+}
+
+render();
+initPlaidLink();
+</script>
+
+</body>
+</html>
