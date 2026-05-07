@@ -706,9 +706,12 @@ function importCSV(event) {
 function clearAllData() {
   if (confirm('Delete all data?')) {
     txns = []; income = []; catBudgets = {}; weeklyBudget = 1725;
-    save();
-    render();
-    alert('✅ Data cleared');
+    localStorage.removeItem('txns');
+    localStorage.removeItem('income');
+    localStorage.removeItem('catBudgets');
+    localStorage.removeItem('weeklyBudget');
+    alert('✅ Data cleared — reloading...');
+    location.reload();
   }
 }
 
