@@ -503,8 +503,16 @@
         <div class="ai-msg bot">👋 Hi! I can answer questions about your spending. Try: <em>"How much did I spend this week?"</em> or <em>"What's my biggest expense?"</em></div>
       </div>
       <div class="ai-input-row">
-        <input type="text" id="aiInput" placeholder="Ask anything..." onkeypress="if(event.key==='Enter')askAI()">
+        <input type="text" id="aiInput" placeholder="Ask or tap 🎤..." onkeypress="if(event.key==='Enter')askAI()">
+        <button class="btn btn-primary" id="aiMicBtn" onclick="aiMicListen()" title="Speak your question" style="padding: 12px 16px;">🎤</button>
         <button class="btn btn-primary" onclick="askAI()">Ask</button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; margin-top: 10px; font-size: 0.85rem; color: var(--text-muted); flex-wrap: wrap;">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="aiSpeakToggle" onchange="toggleAiSpeak()" checked> Speak answers aloud
+        </label>
+        <button class="btn btn-primary" id="convModeBtn" onclick="toggleConversationMode()" style="padding: 8px 14px; font-size: 0.85rem;">🎙️ Start Conversation</button>
+        <span id="convStatus" style="font-weight: 700;"></span>
       </div>
     </div>
 
@@ -1690,8 +1698,234 @@ function askAI() {
   setTimeout(() => {
     chat.innerHTML += `<div class="ai-msg bot">${answer}</div>`;
     chat.scrollTop = chat.scrollHeight;
+    // Speak aloud if enabled
+    if (document.getElementById('aiSpeakToggle')?.checked) speakAloud(answer);
   }, 400);
   chat.scrollTop = chat.scrollHeight;
+}
+
+// ====== v1.10+ Voice for AI assistant ======
+let aiVoiceRecog = null, aiVoiceListening = false;
+function aiMicListen() {
+  const btn = document.getElementById('aiMicBtn');
+  const input = document.getElementById('aiInput');
+  if (!btn || !input) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    showToast('⚠️ Voice not supported in this browser. Try Chrome or Edge.');
+    return;
+  }
+  if (aiVoiceListening) {
+    if (aiVoiceRecog) aiVoiceRecog.stop();
+    aiVoiceListening = false;
+    btn.textContent = '🎤';
+    btn.classList.remove('listening');
+    return;
+  }
+  aiVoiceRecog = new SR();
+  aiVoiceRecog.lang = 'en-GB';
+  aiVoiceRecog.continuous = false;
+  aiVoiceRecog.interimResults = false;
+  aiVoiceRecog.onresult = (e) => {
+    const transcript = e.results[0][0].transcript;
+    input.value = transcript;
+    aiVoiceListening = false;
+    btn.textContent = '🎤';
+    btn.classList.remove('listening');
+    setTimeout(() => askAI(), 300);
+  };
+  aiVoiceRecog.onerror = () => { aiVoiceListening = false; btn.textContent = '🎤'; btn.classList.remove('listening'); };
+  aiVoiceRecog.onend = () => { aiVoiceListening = false; btn.textContent = '🎤'; btn.classList.remove('listening'); };
+  aiVoiceRecog.start();
+  aiVoiceListening = true;
+  btn.textContent = '🔴';
+  btn.classList.add('listening');
+  showToast('🎙️ Listening — ask your question');
+}
+
+// Strip HTML for speech
+function stripHTML(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html.replace(/<br\s*\/?>/gi, '. ');
+  return tmp.textContent || tmp.innerText || '';
+}
+
+function speakAloud(text) {
+  if (!('speechSynthesis' in window)) return;
+  // Cancel any in-progress speech
+  window.speechSynthesis.cancel();
+  const clean = stripHTML(text);
+  if (!clean.trim()) return;
+  const utter = new SpeechSynthesisUtterance(clean);
+  utter.lang = 'en-GB';
+  utter.rate = 1.05;
+  utter.pitch = 1;
+  utter.volume = 1;
+  // Try to pick an English voice
+  const voices = window.speechSynthesis.getVoices();
+  const enVoice = voices.find(v => /en[-_](GB|IE)/.test(v.lang)) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+  if (enVoice) utter.voice = enVoice;
+  window.speechSynthesis.speak(utter);
+}
+
+function toggleAiSpeak() {
+  const on = document.getElementById('aiSpeakToggle')?.checked;
+  if (!on) window.speechSynthesis?.cancel();
+  showToast(on ? '🔊 Voice replies on' : '🔇 Voice replies off');
+}
+
+// Pre-load voices (some browsers lazy-load)
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.addEventListener?.('voiceschanged', () => {});
+}
+
+// ====== Two-way conversation mode ======
+let conversationMode = false;
+let conversationContext = { lastTopic: null, lastPeriod: null, history: [] };
+
+function toggleConversationMode() {
+  conversationMode = !conversationMode;
+  const btn = document.getElementById('convModeBtn');
+  const status = document.getElementById('convStatus');
+  if (conversationMode) {
+    btn.textContent = '🛑 End Conversation';
+    btn.style.background = '#e74c3c';
+    document.getElementById('aiSpeakToggle').checked = true; // ensure speech on
+    speakAloud('Hi! What would you like to know about your money?');
+    status.textContent = '🤖 Speaking...';
+    status.style.color = '#667eea';
+    // After greeting finishes, start listening
+    setTimeout(() => { if (conversationMode) startConversationListen(); }, 3500);
+  } else {
+    btn.textContent = '🎙️ Start Conversation';
+    btn.style.background = '';
+    if (aiVoiceRecog) try { aiVoiceRecog.stop(); } catch (e) {}
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    status.textContent = '';
+    aiVoiceListening = false;
+    const micBtn = document.getElementById('aiMicBtn');
+    if (micBtn) { micBtn.textContent = '🎤'; micBtn.classList.remove('listening'); }
+  }
+}
+
+function startConversationListen() {
+  if (!conversationMode) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('⚠️ Voice not supported'); return; }
+  const status = document.getElementById('convStatus');
+  if (status) { status.textContent = '👂 Listening...'; status.style.color = '#27ae60'; }
+  const micBtn = document.getElementById('aiMicBtn');
+  if (micBtn) { micBtn.textContent = '🔴'; micBtn.classList.add('listening'); }
+
+  aiVoiceRecog = new SR();
+  aiVoiceRecog.lang = 'en-GB';
+  aiVoiceRecog.continuous = false;
+  aiVoiceRecog.interimResults = false;
+  aiVoiceRecog.onresult = (e) => {
+    const transcript = e.results[0][0].transcript;
+    document.getElementById('aiInput').value = transcript;
+    handleConversationTurn(transcript);
+  };
+  aiVoiceRecog.onerror = (e) => {
+    if (status) status.textContent = e.error === 'no-speech' ? '👂 Didn\'t hear you...' : `⚠️ ${e.error}`;
+    if (micBtn) { micBtn.textContent = '🎤'; micBtn.classList.remove('listening'); }
+    // Retry after a moment if still in conversation mode
+    if (conversationMode && e.error === 'no-speech') {
+      setTimeout(() => { if (conversationMode) startConversationListen(); }, 1500);
+    }
+  };
+  aiVoiceRecog.onend = () => {
+    if (micBtn) { micBtn.textContent = '🎤'; micBtn.classList.remove('listening'); }
+  };
+  try { aiVoiceRecog.start(); aiVoiceListening = true; } catch (e) { /* already running */ }
+}
+
+function handleConversationTurn(transcript) {
+  const chat = document.getElementById('aiChat');
+  const status = document.getElementById('convStatus');
+  if (!chat) return;
+
+  // Check for end-conversation phrases
+  const lower = transcript.toLowerCase();
+  if (/\b(stop|end|goodbye|bye|that's all|enough|exit|quit)\b/.test(lower)) {
+    chat.innerHTML += `<div class="ai-msg user">${transcript.replace(/</g, '&lt;')}</div>`;
+    chat.innerHTML += `<div class="ai-msg bot">👋 Goodbye! Tap "Start Conversation" anytime.</div>`;
+    chat.scrollTop = chat.scrollHeight;
+    speakAloud('Goodbye!');
+    setTimeout(() => toggleConversationMode(), 1500);
+    return;
+  }
+
+  // Show user turn
+  chat.innerHTML += `<div class="ai-msg user">${transcript.replace(/</g, '&lt;')}</div>`;
+
+  // Resolve follow-up references using context
+  let resolvedQ = resolveContext(transcript);
+
+  // Get answer
+  const answer = answerQuestion(resolvedQ);
+
+  // Update context
+  updateContext(resolvedQ, answer);
+
+  // Show bot turn
+  setTimeout(() => {
+    chat.innerHTML += `<div class="ai-msg bot">${answer}</div>`;
+    chat.scrollTop = chat.scrollHeight;
+    if (status) { status.textContent = '🤖 Speaking...'; status.style.color = '#667eea'; }
+    speakAloud(answer);
+    // After speech ends, listen again
+    if ('speechSynthesis' in window) {
+      const checkSpeechEnd = () => {
+        if (window.speechSynthesis.speaking) {
+          setTimeout(checkSpeechEnd, 200);
+        } else if (conversationMode) {
+          setTimeout(() => { if (conversationMode) startConversationListen(); }, 400);
+        }
+      };
+      setTimeout(checkSpeechEnd, 600);
+    }
+  }, 300);
+  document.getElementById('aiInput').value = '';
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// Resolve "what about last month?" by combining with previous topic
+function resolveContext(q) {
+  const lower = q.toLowerCase();
+  // Common follow-up patterns
+  const followUps = [
+    /^(what about|how about|and)\s+(.+)/,
+    /^(last|this)\s+(week|month|year)\??$/,
+  ];
+  for (const re of followUps) {
+    const m = lower.match(re);
+    if (m && conversationContext.lastTopic) {
+      // Take the period or modifier from the new question and combine with last topic
+      const period = m[2] ? `${m[1] === 'last' || m[1] === 'this' ? m[1] + ' ' + m[2] : m[2]}` : m[2];
+      return `${conversationContext.lastTopic} ${period}`;
+    }
+  }
+  // "more" / "details" / "tell me more"
+  if (/^(more|tell me more|details|why)\b/.test(lower) && conversationContext.history.length > 0) {
+    const last = conversationContext.history[conversationContext.history.length - 1];
+    return last.q + ' details';
+  }
+  return q;
+}
+
+function updateContext(q, a) {
+  conversationContext.history.push({ q, a, time: Date.now() });
+  if (conversationContext.history.length > 10) conversationContext.history.shift();
+  // Extract topic (the noun phrase in the question, rough)
+  const lower = q.toLowerCase();
+  const onMatch = lower.match(/(?:on|for|at)\s+(.+?)(?:\?|$|\s+(?:last|this|today|yesterday))/);
+  if (onMatch) conversationContext.lastTopic = `how much on ${onMatch[1].trim()}`;
+  else if (/biggest|top|most/.test(lower)) conversationContext.lastTopic = 'biggest category';
+  else if (/income/.test(lower)) conversationContext.lastTopic = 'income';
+  else if (/net worth/.test(lower)) conversationContext.lastTopic = 'net worth';
+  else if (/spend/.test(lower)) conversationContext.lastTopic = 'how much';
 }
 // Knowledge base of common merchants → cheaper alternatives (Irish/UK focus)
 const cheaperAlternatives = {
