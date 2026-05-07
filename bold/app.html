@@ -324,30 +324,6 @@
       <div id="paydayContent"></div>
     </div>
 
-    <!-- AI Chat on Dashboard -->
-    <div class="form-card" style="background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; border: none;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h3 style="color: white; margin: 0;">🤖 Ask Thrift</h3>
-        <button onclick="toggleHomeChat()" id="homeChatToggle" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: 700;">Open ▼</button>
-      </div>
-      <div id="homeChatBody" style="display: none;">
-        <div class="ai-chat" id="homeChatLog" style="background: rgba(255,255,255,0.15); max-height: 240px;">
-          <div class="ai-msg bot" style="background: rgba(255,255,255,0.9); color: #2c3e50;">👋 Quick chat — try <em>"How much this week?"</em> or tap 🎙️ to talk</div>
-        </div>
-        <div class="ai-input-row">
-          <input type="text" id="homeChatInput" placeholder="Type or tap 🎤..." onkeypress="if(event.key==='Enter')homeChatAsk()" style="background: rgba(255,255,255,0.95); border: none;">
-          <button onclick="homeChatMic()" id="homeChatMicBtn" title="Speak" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 12px 16px; border-radius: 10px; cursor: pointer; font-weight: 700;">🎤</button>
-          <button onclick="homeChatAsk()" style="background: white; color: var(--accent); border: none; padding: 12px 18px; border-radius: 10px; cursor: pointer; font-weight: 800;">Ask</button>
-        </div>
-        <div style="margin-top: 8px; display: flex; gap: 12px; font-size: 0.8rem; flex-wrap: wrap;">
-          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-            <input type="checkbox" id="homeChatSpeak" checked> Speak replies
-          </label>
-          <button onclick="homeChatStartConversation()" id="homeConvBtn" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 700;">🎙️ Start Conversation</button>
-        </div>
-      </div>
-    </div>
-
     <!-- Hero spend number -->
     <div class="hero-card" id="heroCard">
       <div class="label">This Week</div>
@@ -756,8 +732,34 @@
 
 </div>
 
-<!-- FAB - Floating Action Button -->
-<button class="fab" onclick="switchSection(null, 'daily-log')" title="Quick add transaction">+</button>
+<!-- FAB - Floating Action Button (moved bottom-left to make room for chat) -->
+<button class="fab" onclick="switchSection(null, 'daily-log')" title="Quick add transaction" style="left: 24px; right: auto;">+</button>
+
+<!-- Floating AI Chat Widget -->
+<button id="chatBubble" onclick="toggleFloatingChat()" title="Ask Thrift AI" style="position: fixed; bottom: 24px; right: 24px; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; font-size: 1.8rem; cursor: pointer; box-shadow: 0 8px 24px rgba(102,126,234,0.4); z-index: 1001; transition: transform 0.2s;">🤖</button>
+
+<div id="chatPanel" style="display: none; position: fixed; bottom: 100px; right: 24px; width: 360px; max-width: calc(100vw - 32px); max-height: 70vh; background: var(--bg-card); border-radius: 16px; box-shadow: 0 16px 40px rgba(0,0,0,0.25); z-index: 1001; overflow: hidden; flex-direction: column; border: 1px solid var(--border);">
+  <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;">
+    <div style="font-weight: 800;">🤖 Ask Thrift</div>
+    <button onclick="toggleFloatingChat()" style="background: none; border: none; color: white; font-size: 1.4rem; cursor: pointer; line-height: 1;">×</button>
+  </div>
+  <div id="floatChatLog" style="flex: 1; overflow-y: auto; padding: 12px; background: var(--bg-soft); max-height: 360px;">
+    <div class="ai-msg bot">👋 Hi! Ask me anything about your spending. Try <em>"How much on coffee?"</em> or tap 🎤.</div>
+  </div>
+  <div style="padding: 10px; background: var(--bg-card); border-top: 1px solid var(--border);">
+    <div class="ai-input-row" style="margin-bottom: 6px;">
+      <input type="text" id="floatChatInput" placeholder="Type or tap 🎤..." onkeypress="if(event.key==='Enter')floatChatAsk()">
+      <button onclick="floatChatMic()" id="floatChatMicBtn" title="Speak" style="background: var(--accent); color: white; border: none; padding: 10px 12px; border-radius: 10px; cursor: pointer;">🎤</button>
+      <button onclick="floatChatAsk()" style="background: var(--accent); color: white; border: none; padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 700;">Send</button>
+    </div>
+    <div style="display: flex; gap: 10px; font-size: 0.75rem; color: var(--text-muted); align-items: center; flex-wrap: wrap;">
+      <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+        <input type="checkbox" id="floatChatSpeak" checked> Speak
+      </label>
+      <button onclick="floatChatStartConversation()" style="background: var(--bg-soft); border: 1px solid var(--border); padding: 3px 8px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; color: var(--text);">🎙️ Hands-free</button>
+    </div>
+  </div>
+</div>
 
 <!-- Confetti canvas (created on demand) -->
 
@@ -1804,6 +1806,81 @@ if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
   window.speechSynthesis.addEventListener?.('voiceschanged', () => {});
 }
 
+// ====== Floating chat widget (bottom-right) ======
+function toggleFloatingChat() {
+  const panel = document.getElementById('chatPanel');
+  const bubble = document.getElementById('chatBubble');
+  if (!panel || !bubble) return;
+  const open = panel.style.display === 'flex';
+  if (open) {
+    panel.style.display = 'none';
+    bubble.style.transform = '';
+  } else {
+    panel.style.display = 'flex';
+    bubble.style.transform = 'scale(0.9)';
+    setTimeout(() => document.getElementById('floatChatInput')?.focus(), 100);
+  }
+}
+function floatChatAsk() {
+  const input = document.getElementById('floatChatInput');
+  const log = document.getElementById('floatChatLog');
+  if (!input || !log) return;
+  const q = input.value.trim();
+  if (!q) return;
+  log.innerHTML += `<div class="ai-msg user">${q.replace(/</g, '&lt;')}</div>`;
+  input.value = '';
+  const answer = answerQuestion(q);
+  setTimeout(() => {
+    log.innerHTML += `<div class="ai-msg bot">${answer}</div>`;
+    log.scrollTop = log.scrollHeight;
+    if (document.getElementById('floatChatSpeak')?.checked) speakAloud(answer);
+  }, 300);
+  log.scrollTop = log.scrollHeight;
+}
+function floatChatMic() {
+  const btn = document.getElementById('floatChatMicBtn');
+  const input = document.getElementById('floatChatInput');
+  if (!btn || !input) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('⚠️ Voice not supported. Try Chrome/Edge.'); return; }
+  if (window._floatListening) {
+    if (window._floatRecog) window._floatRecog.stop();
+    window._floatListening = false;
+    btn.textContent = '🎤';
+    return;
+  }
+  const recog = new SR();
+  recog.lang = 'en-GB';
+  recog.continuous = false;
+  recog.interimResults = false;
+  recog.onresult = (e) => {
+    input.value = e.results[0][0].transcript;
+    setTimeout(() => floatChatAsk(), 250);
+  };
+  recog.onend = () => { window._floatListening = false; btn.textContent = '🎤'; };
+  recog.onerror = () => { window._floatListening = false; btn.textContent = '🎤'; };
+  recog.start();
+  window._floatRecog = recog;
+  window._floatListening = true;
+  btn.textContent = '🔴';
+}
+function floatChatStartConversation() {
+  // Switch to Insights tab where the full conversation mode lives
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.emoji-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('insights').classList.add('active');
+  const navBtns = document.querySelectorAll('.emoji-nav button');
+  if (navBtns[2]) navBtns[2].classList.add('active');
+  // Close the floating chat
+  document.getElementById('chatPanel').style.display = 'none';
+  // Scroll to AI section and start conversation
+  setTimeout(() => {
+    const aiCard = document.querySelector('#insights .form-card h3');
+    aiCard?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => toggleConversationMode(), 600);
+  }, 200);
+}
+
 // ====== Home dashboard mini-chat ======
 function toggleHomeChat() {
   const body = document.getElementById('homeChatBody');
@@ -2086,7 +2163,49 @@ const categoryTips = {
 };
 
 function answerQuestion(q) {
-  const lower = q.toLowerCase();
+  const lower = q.toLowerCase().trim();
+
+  // ===== Greetings & small talk =====
+  if (/^(hi|hello|hey|yo|hiya|howdy|hola|good (morning|afternoon|evening)|what'?s up)[\s!.?]*$/i.test(lower)) {
+    const greetings = [
+      `👋 Hi! I'm Thrift. I can answer anything about your spending — try <em>"how much this week?"</em>`,
+      `Hey there! Want to know your biggest expense, or get cheaper alternatives for something?`,
+      `Hello! Ask me about coffee, groceries, subscriptions, your budget, or net worth — I've got the data.`,
+    ];
+    return greetings[Math.floor(Math.random() * greetings.length)];
+  }
+  if (/^(thanks|thank you|cheers|ta|nice|cool|great|awesome|good)[\s!.?]*$/i.test(lower)) {
+    return `You're welcome! 😊 Anything else?`;
+  }
+  if (/^(ok|okay|got it|sure|alright)[\s!.?]*$/i.test(lower)) {
+    return `👍 Ask me anything else when you're ready.`;
+  }
+  if (/^(bye|goodbye|see ya|later|cya|adios)[\s!.?]*$/i.test(lower)) {
+    return `👋 Goodbye! I'm here whenever you need me.`;
+  }
+  if (/how (are you|r u|you doing)/i.test(lower)) {
+    return `I'm great, thanks! Ready to dig into your finances. What would you like to know?`;
+  }
+  if (/who are you|what are you|your name/i.test(lower)) {
+    return `I'm Thrift's AI assistant 🤖 — I read your transactions, budgets, goals, and pots, and answer questions in plain English.`;
+  }
+  if (/what can you do|what do you know|capabilities/i.test(lower)) {
+    return `I can answer questions about:<br>💰 Spending (categories, merchants, periods)<br>📊 Comparisons (this vs last week/month)<br>🔮 Forecasts (end-of-month projection)<br>💡 Cheaper alternatives & money-saving tips<br>📋 Budgets, goals, pots, net worth<br>🔁 Subscriptions, bills, taxes<br>🌱 CO2 footprint<br>And general advice like "should I afford this?"<br><br>Try asking <em>"help"</em> for examples.`;
+  }
+  if (/joke|funny|laugh/i.test(lower)) {
+    const jokes = [
+      `Why did the budget cross the road? To get to the other side… of the month. 😅`,
+      `My wallet is like an onion — opening it makes me cry.`,
+      `I told my bank I needed change. They said no problem and gave me a new account number.`,
+    ];
+    return jokes[Math.floor(Math.random() * jokes.length)];
+  }
+  if (/^(yes|yeah|yep|yup|y|no|nope|nah|n)[\s!.?]*$/i.test(lower)) {
+    return `Got it. What would you like to ask?`;
+  }
+  if (/test|testing|are you working/i.test(lower) && lower.length < 25) {
+    return `✅ Yes I'm working! Try a real question like <em>"how much this week?"</em> or <em>"biggest category?"</em>`;
+  }
 
   // Cheaper alternative requests
   if (/cheaper|alternative|save (money|on)|how to save|reduce|cut/i.test(lower)) {
