@@ -228,6 +228,13 @@
     </div>
 
     <div class="form-card">
+      <h3>📥 Import AIB CSV</h3>
+      <p style="color: #8fa3b8; margin-bottom: 12px; font-size: 0.9rem;">Upload your AIB transaction export</p>
+      <input type="file" id="csvFile" accept=".csv" onchange="importCSV(event)" style="display: none;">
+      <button class="btn btn-primary" onclick="document.getElementById('csvFile').click()" style="width: 100%;">Choose CSV File</button>
+    </div>
+
+    <div class="form-card">
       <h3>📊 Data</h3>
       <button class="btn btn-primary" onclick="loadSampleData()" style="width: 100%; margin-bottom: 12px;">Load Sample Data</button>
       <button class="btn btn-primary" style="background: #e74c3c; width: 100%;" onclick="clearAllData()">Clear All Data</button>
@@ -340,6 +347,69 @@ function loadSampleData() {
   save();
   render();
   alert('✅ Demo data loaded!');
+}
+
+const csvAutoCategories = {
+  'Groceries': /supermarket|tesco|dunnes|lidl|aldi|spar|centra|supervalu|grocer/i,
+  'Fuel & Transport': /taxi|uber|bus|train|petrol|fuel|parking|ryanair|aer lingus|luas|dart|circle k|applegreen/i,
+  'Utilities & Bills': /electricity|water|gas|broadband|phone|bill|esb|vodafone|eir|sky|virgin|three|bord gais/i,
+  'Subscriptions': /netflix|spotify|disney|prime|apple|google|microsoft|subscription/i,
+  'Eating Out & Coffee': /restaurant|cafe|coffee|starbucks|costa|mcdonald|burger|pizza|deli|domino|kfc|subway/i,
+  'Kids & Family': /school|creche|toy|kids|child/i,
+  'Health & Fitness': /gym|pharmacy|doctor|medical|fitness|boots|hospital/i,
+  'Personal & Discretionary': /amazon|shop|store|clothing|primark|zara|h&m|penneys/i,
+};
+
+function importCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const lines = e.target.result.split('\n').filter(l => l.trim());
+      if (lines.length < 2) return alert('❌ Empty CSV');
+
+      let imported = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split(',');
+        if (parts.length < 7) continue;
+
+        const date = parts[1].replace(/"/g, '').trim();
+        const desc = parts[2].replace(/"/g, '').trim();
+        const debit = parts[5].replace(/"/g, '').replace(/[€$£¥,\s]/g, '').trim();
+        const credit = parts[6].replace(/"/g, '').replace(/[€$£¥,\s]/g, '').trim();
+
+        if (!date || !desc) continue;
+        if (!/^\d{2}\/\d{2}\/\d{4}$/.test(date)) continue;
+
+        const dp = date.split('/');
+        const convertedDate = `${dp[2]}-${dp[1]}-${dp[0]}`;
+
+        const amount = debit ? parseFloat(debit) : parseFloat(credit);
+        if (!amount) continue;
+
+        let cat = 'Personal & Discretionary';
+        for (const [c, regex] of Object.entries(csvAutoCategories)) {
+          if (regex.test(desc)) { cat = c; break; }
+        }
+
+        if (debit) {
+          txns.push({ id: Date.now() + Math.random(), date: convertedDate, amount: Math.abs(amount), category: cat, desc, account: 'AIB Personal' });
+        } else {
+          income.push({ id: Date.now() + Math.random(), date: convertedDate, amount: Math.abs(amount), desc, account: 'AIB Personal' });
+        }
+        imported++;
+      }
+
+      if (imported === 0) return alert('❌ Could not import any transactions.');
+      save();
+      render();
+      alert(`✅ Imported ${imported} transactions!`);
+    } catch (err) {
+      alert('❌ Error: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
 }
 
 function clearAllData() {
