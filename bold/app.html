@@ -451,6 +451,33 @@
       <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Predicted from recurring patterns</p>
       <div id="billCalendar"></div>
     </div>
+
+    <!-- Smart suggestions -->
+    <div class="form-card">
+      <h3>💡 Smart Suggestions</h3>
+      <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Personalised tips to save money</p>
+      <div id="smartSuggestions"></div>
+    </div>
+
+    <!-- Round-up simulator -->
+    <div class="form-card">
+      <h3>🪙 Round-Up Savings Simulator</h3>
+      <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">If you'd rounded up every transaction, you'd have saved...</p>
+      <div id="roundUpSim"></div>
+    </div>
+
+    <!-- Cash-flow forecast -->
+    <div class="form-card">
+      <h3>🔮 End-of-Month Forecast</h3>
+      <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Projected balance based on bills + average spending</p>
+      <div id="cashFlowForecast"></div>
+    </div>
+
+    <!-- Streaks & badges -->
+    <div class="form-card">
+      <h3>🏆 Streaks & Achievements</h3>
+      <div id="streaksDisplay"></div>
+    </div>
   </div>
 
   <!-- Goals -->
@@ -1454,6 +1481,301 @@ function celebrate() {
   tick();
 }
 
+// ====== v1.8 Round-up savings simulator ======
+function calculateRoundUps(period = 'all') {
+  const now = new Date();
+  let cutoff = '';
+  if (period === '30d') { const d = new Date(now); d.setDate(d.getDate() - 30); cutoff = d.toISOString().split('T')[0]; }
+  else if (period === '90d') { const d = new Date(now); d.setDate(d.getDate() - 90); cutoff = d.toISOString().split('T')[0]; }
+  else if (period === '1y') { const d = new Date(now); d.setFullYear(d.getFullYear() - 1); cutoff = d.toISOString().split('T')[0]; }
+  const filtered = cutoff ? txns.filter(t => t.date >= cutoff) : txns;
+  let saved = 0;
+  filtered.forEach(t => {
+    const cents = (t.amount * 100) % 100;
+    const roundUp = cents === 0 ? 0 : (100 - cents) / 100;
+    saved += roundUp;
+  });
+  return { saved, count: filtered.length };
+}
+function renderRoundUpSim() {
+  const el = document.getElementById('roundUpSim');
+  if (!el) return;
+  if (!txns.length) {
+    el.innerHTML = '<div class="empty-state"><div class="illust">🪙</div><div class="title">No transactions yet</div><div class="hint">Add or import some to see how round-ups would build up.</div></div>';
+    return;
+  }
+  const all = calculateRoundUps('all');
+  const last30 = calculateRoundUps('30d');
+  const last90 = calculateRoundUps('90d');
+  const lastY = calculateRoundUps('1y');
+  // Project annual based on last 30
+  const annualProjection = last30.saved * 12;
+  el.innerHTML = `
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">
+      <div style="background: var(--bg-soft); padding: 14px; border-radius: 10px;">
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Last 30 days</div>
+        <div style="font-size: 1.6rem; font-weight: 800; color: var(--accent);">€${last30.saved.toFixed(2)}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">${last30.count} txns</div>
+      </div>
+      <div style="background: var(--bg-soft); padding: 14px; border-radius: 10px;">
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Last 90 days</div>
+        <div style="font-size: 1.6rem; font-weight: 800; color: var(--accent);">€${last90.saved.toFixed(2)}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">${last90.count} txns</div>
+      </div>
+      <div style="background: var(--bg-soft); padding: 14px; border-radius: 10px;">
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Last year</div>
+        <div style="font-size: 1.6rem; font-weight: 800; color: var(--accent);">€${lastY.saved.toFixed(2)}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">${lastY.count} txns</div>
+      </div>
+      <div style="background: linear-gradient(135deg, var(--accent), var(--accent-2)); padding: 14px; border-radius: 10px; color: white;">
+        <div style="font-size: 0.85rem; opacity: 0.9;">📈 Projected annual</div>
+        <div style="font-size: 1.6rem; font-weight: 800;">€${annualProjection.toFixed(2)}</div>
+        <div style="font-size: 0.75rem; opacity: 0.9;">based on last 30 days</div>
+      </div>
+    </div>
+    <div style="margin-top: 12px; padding: 12px; background: var(--bg-soft); border-radius: 8px; font-size: 0.85rem; color: var(--text-muted);">
+      💡 Tip: rounding up €4.30 to €5 would save €0.70 per transaction. Set up a savings pot above to start tracking.
+    </div>`;
+}
+
+// ====== v1.8 Streaks & badges ======
+function calculateStreaks() {
+  const today = new Date();
+  // Days under daily budget (weekly / 7)
+  const dailyTarget = weeklyBudget / 7;
+  let underBudgetStreak = 0;
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const ds = d.toISOString().split('T')[0];
+    const daySpend = txns.filter(t => t.date === ds).reduce((s, t) => s + t.amount, 0);
+    if (daySpend <= dailyTarget) underBudgetStreak++;
+    else break;
+  }
+
+  // Total transactions logged
+  const totalTxns = txns.length + income.length;
+
+  // Goals achieved
+  const goalsAchieved = goals.filter(g => g.current >= g.target).length;
+
+  // Days using the app (unique txn dates)
+  const uniqueDays = new Set(txns.map(t => t.date)).size;
+
+  // Categories with budget set
+  const categoriesWithBudget = Object.keys(catBudgets).length;
+
+  return { underBudgetStreak, totalTxns, goalsAchieved, uniqueDays, categoriesWithBudget };
+}
+
+function renderStreaks() {
+  const el = document.getElementById('streaksDisplay');
+  if (!el) return;
+  const s = calculateStreaks();
+  const badges = [];
+  // Streak badges
+  if (s.underBudgetStreak >= 1) badges.push({ icon: '🔥', label: `${s.underBudgetStreak} day under-budget streak`, earned: true });
+  if (s.underBudgetStreak >= 7) badges.push({ icon: '⭐', label: 'One week under budget', earned: true });
+  if (s.underBudgetStreak >= 30) badges.push({ icon: '🏆', label: 'Month-long discipline', earned: true });
+  // Activity badges
+  if (s.totalTxns >= 10) badges.push({ icon: '📝', label: '10+ transactions logged', earned: true });
+  if (s.totalTxns >= 100) badges.push({ icon: '📚', label: '100+ transactions logged', earned: true });
+  if (s.totalTxns >= 500) badges.push({ icon: '💯', label: '500+ transactions logged', earned: true });
+  // Goal badges
+  if (s.goalsAchieved >= 1) badges.push({ icon: '🎯', label: `${s.goalsAchieved} goal${s.goalsAchieved > 1 ? 's' : ''} achieved`, earned: true });
+  if (s.goalsAchieved >= 5) badges.push({ icon: '🌟', label: 'Goal master', earned: true });
+  // Engagement badges
+  if (s.uniqueDays >= 7) badges.push({ icon: '📅', label: `Active ${s.uniqueDays} unique days`, earned: true });
+  if (s.categoriesWithBudget >= 4) badges.push({ icon: '📊', label: 'Budgets set across categories', earned: true });
+
+  // Locked / next badges
+  const locked = [];
+  if (s.underBudgetStreak < 7) locked.push({ icon: '⭐', label: `Streak: ${s.underBudgetStreak}/7 days under budget` });
+  if (s.totalTxns < 100) locked.push({ icon: '📚', label: `${s.totalTxns}/100 transactions to next badge` });
+  if (s.goalsAchieved < 1) locked.push({ icon: '🎯', label: 'Hit your first goal' });
+
+  let html = '';
+  if (badges.length) {
+    html += '<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">';
+    badges.forEach(b => {
+      html += `<div style="background: linear-gradient(135deg, #43e97b, #38f9d7); color: white; padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(67,233,123,0.3);">${b.icon} ${b.label}</div>`;
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="empty-state"><div class="illust">🏆</div><div class="title">No badges yet</div><div class="hint">Log transactions and stay under budget to earn achievements.</div></div>';
+  }
+  if (locked.length) {
+    html += '<div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; font-weight: 700;">🔒 Working towards:</div>';
+    html += '<div style="display: flex; flex-wrap: wrap; gap: 8px;">';
+    locked.forEach(l => {
+      html += `<div style="background: var(--bg-soft); color: var(--text-muted); padding: 8px 14px; border-radius: 999px; font-size: 0.8rem; border: 1px dashed var(--border);">${l.icon} ${l.label}</div>`;
+    });
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
+// ====== v1.8 Smart suggestions ======
+function generateSuggestions() {
+  const sugs = [];
+  // Suggestion 1: Subscriptions over €X/year
+  const subs = detectSubscriptions();
+  const monthlySubTotal = subs.filter(s => s.cycle === 'Monthly').reduce((sum, s) => sum + s.avgAmount, 0);
+  if (monthlySubTotal > 30) {
+    sugs.push({
+      icon: '🔁',
+      title: `You're spending €${monthlySubTotal.toFixed(2)}/month on subscriptions`,
+      detail: `That's €${(monthlySubTotal * 12).toFixed(2)}/year. Review them in the Subscriptions section above.`,
+      severity: 'warn',
+    });
+  }
+  // Suggestion 2: Top category over 40% of total
+  const totalSpend = txns.reduce((s, t) => s + t.amount, 0);
+  if (totalSpend > 0) {
+    const catSums = {};
+    txns.forEach(t => { catSums[t.category] = (catSums[t.category] || 0) + t.amount; });
+    const sorted = Object.entries(catSums).sort((a, b) => b[1] - a[1]);
+    if (sorted.length && sorted[0][1] / totalSpend > 0.4) {
+      sugs.push({
+        icon: '📊',
+        title: `${sorted[0][0]} is ${((sorted[0][1] / totalSpend) * 100).toFixed(0)}% of your spending`,
+        detail: `€${sorted[0][1].toFixed(2)} of €${totalSpend.toFixed(2)}. Consider setting a tighter budget here.`,
+        severity: 'warn',
+      });
+    }
+  }
+  // Suggestion 3: Categories without budgets
+  const noBudget = categories.filter(c => !catBudgets[c] && txns.some(t => t.category === c));
+  if (noBudget.length >= 3) {
+    sugs.push({
+      icon: '🎯',
+      title: `${noBudget.length} categories don't have budgets set`,
+      detail: `Setting budgets unlocks the warning system. Go to Settings → Budgets.`,
+      severity: 'info',
+    });
+  }
+  // Suggestion 4: Spending vs last week
+  const { start, end } = getWeekRange();
+  const lastStart = new Date(new Date(start).getTime() - 7 * 86400000).toISOString().split('T')[0];
+  const lastEnd = new Date(new Date(end).getTime() - 7 * 86400000).toISOString().split('T')[0];
+  const thisWeek = txns.filter(t => t.date >= start && t.date <= end).reduce((s, t) => s + t.amount, 0);
+  const lastWeek = txns.filter(t => t.date >= lastStart && t.date <= lastEnd).reduce((s, t) => s + t.amount, 0);
+  if (lastWeek > 0 && thisWeek > lastWeek * 1.3) {
+    sugs.push({
+      icon: '📈',
+      title: `You're spending ${(((thisWeek / lastWeek) - 1) * 100).toFixed(0)}% more than last week`,
+      detail: `€${thisWeek.toFixed(2)} vs €${lastWeek.toFixed(2)}. Time to slow down?`,
+      severity: 'warn',
+    });
+  }
+  // Suggestion 5: Round-up potential
+  const ru = calculateRoundUps('30d');
+  if (ru.saved > 5) {
+    sugs.push({
+      icon: '🪙',
+      title: `Round-ups would save €${ru.saved.toFixed(2)}/month`,
+      detail: `That's €${(ru.saved * 12).toFixed(2)}/year. See the simulator below.`,
+      severity: 'good',
+    });
+  }
+  // Suggestion 6: No goals set
+  if (!goals.length && txns.length > 10) {
+    sugs.push({
+      icon: '🎯',
+      title: 'Try setting a savings goal',
+      detail: 'Even small goals (€100 emergency fund) make budgeting more motivating.',
+      severity: 'info',
+    });
+  }
+  // Suggestion 7: Income vs spending
+  const totalIn = income.reduce((s, i) => s + i.amount, 0);
+  if (totalIn > 0 && totalSpend > totalIn * 0.95) {
+    sugs.push({
+      icon: '⚠️',
+      title: 'Spending is close to income',
+      detail: `Spent €${totalSpend.toFixed(2)} vs income €${totalIn.toFixed(2)}. Build an emergency buffer.`,
+      severity: 'warn',
+    });
+  }
+  return sugs;
+}
+
+function renderSmartSuggestions() {
+  const el = document.getElementById('smartSuggestions');
+  if (!el) return;
+  const sugs = generateSuggestions();
+  if (!sugs.length) {
+    el.innerHTML = '<div class="empty-state"><div class="illust">💡</div><div class="title">No insights yet</div><div class="hint">Add more transactions and we\'ll surface smart tips.</div></div>';
+    return;
+  }
+  const colors = { good: '#27ae60', warn: '#f6a93b', info: '#667eea', bad: '#e74c3c' };
+  el.innerHTML = sugs.map(s => `
+    <div style="background: var(--bg-soft); padding: 14px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid ${colors[s.severity] || '#667eea'};">
+      <div style="font-weight: 700; color: var(--text); margin-bottom: 4px;">${s.icon} ${s.title}</div>
+      <div style="font-size: 0.85rem; color: var(--text-muted);">${s.detail}</div>
+    </div>`).join('');
+}
+
+// ====== v1.8 Cash-flow forecast ======
+function renderCashFlowForecast() {
+  const el = document.getElementById('cashFlowForecast');
+  if (!el) return;
+  const today = new Date();
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const todayStr = today.toISOString().split('T')[0];
+  const monthStart = todayStr.slice(0, 7) + '-01';
+
+  // Spent so far this month
+  const spentSoFar = txns.filter(t => t.date >= monthStart && t.date <= todayStr).reduce((s, t) => s + t.amount, 0);
+  const incomeSoFar = income.filter(t => t.date >= monthStart && t.date <= todayStr).reduce((s, t) => s + t.amount, 0);
+
+  // Daily average over last 30 days
+  const thirtyAgo = new Date(today); thirtyAgo.setDate(thirtyAgo.getDate() - 30);
+  const thirtyAgoStr = thirtyAgo.toISOString().split('T')[0];
+  const last30Spend = txns.filter(t => t.date >= thirtyAgoStr).reduce((s, t) => s + t.amount, 0);
+  const dailyAvg = last30Spend / 30;
+
+  // Days remaining
+  const daysRemaining = Math.round((monthEnd - today) / 86400000);
+
+  // Upcoming bills in remaining days
+  const subs = detectSubscriptions();
+  const billsRemaining = subs.filter(s => {
+    const next = new Date(s.nextDate);
+    return next > today && next <= monthEnd;
+  }).reduce((sum, s) => sum + s.avgAmount, 0);
+
+  // Projected
+  const projectedAdditional = (dailyAvg * daysRemaining) + billsRemaining;
+  const projectedMonthlySpend = spentSoFar + projectedAdditional;
+  const projectedNet = incomeSoFar - projectedMonthlySpend;
+
+  el.innerHTML = `
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">
+      <div style="background: var(--bg-soft); padding: 14px; border-radius: 10px;">
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Spent this month</div>
+        <div style="font-size: 1.5rem; font-weight: 800; color: var(--text);">€${spentSoFar.toFixed(2)}</div>
+      </div>
+      <div style="background: var(--bg-soft); padding: 14px; border-radius: 10px;">
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Daily average</div>
+        <div style="font-size: 1.5rem; font-weight: 800; color: var(--text);">€${dailyAvg.toFixed(2)}</div>
+      </div>
+      <div style="background: var(--bg-soft); padding: 14px; border-radius: 10px;">
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Bills coming</div>
+        <div style="font-size: 1.5rem; font-weight: 800; color: var(--warn);">€${billsRemaining.toFixed(2)}</div>
+      </div>
+      <div style="background: var(--bg-soft); padding: 14px; border-radius: 10px;">
+        <div style="font-size: 0.85rem; color: var(--text-muted);">${daysRemaining} days left</div>
+        <div style="font-size: 1.5rem; font-weight: 800; color: var(--text);">€${projectedAdditional.toFixed(2)}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">projected to spend</div>
+      </div>
+    </div>
+    <div style="margin-top: 16px; padding: 16px; background: linear-gradient(135deg, ${projectedNet >= 0 ? '#43e97b, #38f9d7' : '#ff5e5e, #c0392b'}); border-radius: 12px; color: white; text-align: center;">
+      <div style="font-size: 0.9rem; opacity: 0.9;">Projected month-end position</div>
+      <div style="font-size: 2rem; font-weight: 900; margin: 4px 0;">${projectedNet >= 0 ? '+' : ''}€${projectedNet.toFixed(2)}</div>
+      <div style="font-size: 0.85rem; opacity: 0.9;">€${projectedMonthlySpend.toFixed(2)} total spend vs €${incomeSoFar.toFixed(2)} income</div>
+    </div>`;
+}
+
 // ====== v1.6 Subscription detection ======
 function detectSubscriptions() {
   // Group txns by normalized merchant key
@@ -2198,6 +2520,12 @@ function render() {
   if (document.getElementById('goalsList')) renderGoals();
   if (document.getElementById('assetsList')) renderNetWorth();
   if (document.getElementById('potsList')) renderPots();
+
+  // v1.8 smart features
+  if (document.getElementById('smartSuggestions')) renderSmartSuggestions();
+  if (document.getElementById('roundUpSim')) renderRoundUpSim();
+  if (document.getElementById('cashFlowForecast')) renderCashFlowForecast();
+  if (document.getElementById('streaksDisplay')) renderStreaks();
 
   filterTransactions();
   renderCharts();
