@@ -350,64 +350,193 @@ function loadSampleData() {
 }
 
 const csvAutoCategories = {
-  'Groceries': /supermarket|tesco|dunnes|lidl|aldi|spar|centra|supervalu|grocer/i,
-  'Fuel & Transport': /taxi|uber|bus|train|petrol|fuel|parking|ryanair|aer lingus|luas|dart|circle k|applegreen/i,
-  'Utilities & Bills': /electricity|water|gas|broadband|phone|bill|esb|vodafone|eir|sky|virgin|three|bord gais/i,
-  'Subscriptions': /netflix|spotify|disney|prime|apple|google|microsoft|subscription/i,
-  'Eating Out & Coffee': /restaurant|cafe|coffee|starbucks|costa|mcdonald|burger|pizza|deli|domino|kfc|subway/i,
-  'Kids & Family': /school|creche|toy|kids|child/i,
-  'Health & Fitness': /gym|pharmacy|doctor|medical|fitness|boots|hospital/i,
-  'Personal & Discretionary': /amazon|shop|store|clothing|primark|zara|h&m|penneys/i,
+  'Groceries': /supermarket|tesco|dunnes|lidl|aldi|spar|centra|supervalu|grocer|sainsbury|asda|morrison|waitrose|m&s food|marks.*spencer|whole.?foods|trader.?joe|kroger|safeway|walmart.*grocery|carrefour|albert.?heijn/i,
+  'Fuel & Transport': /taxi|uber|lyft|bolt|free.?now|bus|train|metro|tube|petrol|fuel|gas station|parking|ryanair|aer lingus|luas|dart|irish.?rail|circle.?k|applegreen|maxol|topaz|texaco|shell|esso|bp|easyjet|jet2|wizz.?air|british.?airways|delta|united|lufthansa|amtrak|tfl|oyster|nationalrail|trainline|omio|trivago|booking\.com|airbnb|hotels\.com|expedia/i,
+  'Utilities & Bills': /electricity|water|gas bill|broadband|phone|mobile|telecom|bill|esb|electric ireland|vodafone|eir|sky|virgin|three|tesco mobile|gomo|bord.?gais|flogas|prepay|prepaid|insurance|axa|aviva|allianz|zurich/i,
+  'Subscriptions': /netflix|spotify|disney|disney\+|prime video|apple\.com|apple music|itunes|google.*play|google.*storage|microsoft|office 365|adobe|dropbox|icloud|youtube|twitch|hulu|hbo|paramount|patreon|substack|notion|figma|canva|github|chatgpt|openai|anthropic|claude|midjourney|linkedin|nytimes|economist|subscription/i,
+  'Eating Out & Coffee': /restaurant|cafe|coffee|starbucks|costa|nero|insomnia|butlers|mcdonald|burger.?king|pizza|deli|domino|kfc|subway|nando|wagamama|five.?guys|chipotle|pret|leon|greggs|wetherspoon|wagamama|tim.?horton|deliveroo|just.?eat|uber.?eats|takeaway|dine|bistro|pub|bar|brewery|wine|gastropub/i,
+  'Kids & Family': /school|creche|toy|kids|child|smyths|mothercare|babies|early.?learning|gymboree|tots|nursery|playschool/i,
+  'Health & Fitness': /gym|pharmacy|doctor|medical|fitness|boots|hospital|clinic|dental|optician|specsavers|vision.?express|cvs|walgreens|holland.*barrett|mcCabes|dunaway|medicare|insurance.*health|peloton|crossfit|yoga|pilates/i,
+  'Personal & Discretionary': /amazon|shop|store|clothing|primark|zara|h&m|penneys|next |asos|river.?island|topshop|debenhams|dunnes stores|argos|currys|harvey.?norman|ikea|home.?store|ebay|etsy|aliexpress|shein|temu|nike|adidas|sports.?direct|jd.?sports|footlocker|brown.?thomas|arnotts|amex|american.?express|visa.?payment|mastercard.*payment/i,
 };
 
-// Quote-aware CSV line parser (handles commas inside quoted fields)
-function parseCSVLine(line) {
+// Universal CSV line parser — handles any delimiter and quoted fields
+function parseCSVLine(line, delim = ',') {
   const cols = [];
   let curr = '', inQuotes = false;
-  for (let c of line) {
-    if (c === '"') inQuotes = !inQuotes;
-    else if (c === ',' && !inQuotes) { cols.push(curr.trim()); curr = ''; }
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQuotes && line[i+1] === '"') { curr += '"'; i++; }  // escaped quote
+      else inQuotes = !inQuotes;
+    } else if (c === delim && !inQuotes) { cols.push(curr.trim()); curr = ''; }
     else curr += c;
   }
   cols.push(curr.trim());
   return cols;
 }
 
-// Try to parse a date string in any common format
+// Detect delimiter by counting candidates in first non-empty lines
+function detectDelimiter(lines) {
+  const candidates = [',', ';', '\t', '|'];
+  let best = ',', bestScore = 0;
+  const sample = lines.slice(0, Math.min(10, lines.length));
+  for (const d of candidates) {
+    const counts = sample.map(l => (l.match(new RegExp('\\' + d, 'g')) || []).length);
+    const avg = counts.reduce((a,b)=>a+b,0) / counts.length;
+    if (avg > bestScore) { bestScore = avg; best = d; }
+  }
+  return best;
+}
+
+// Parse any common date format
 function parseAnyDate(s) {
   if (!s) return null;
   s = s.replace(/"/g, '').trim();
+  // Strip time component
+  s = s.split(/[T ]/)[0];
+
   // YYYY-MM-DD or YYYY/MM/DD
-  let m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/);
   if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
-  // DD/MM/YYYY or DD-MM-YYYY
-  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-  if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
-  // DD Mon YYYY (e.g. "5 May 2026")
-  m = s.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})/);
+
+  // DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY (European default)
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
   if (m) {
-    const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
-    const mn = months[m[2].toLowerCase().slice(0,3)];
-    if (mn) return `${m[3]}-${String(mn).padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    const a = parseInt(m[1]), b = parseInt(m[2]);
+    // If first part > 12, it's definitely day-first. If second > 12, month-first (US).
+    if (a > 12) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    if (b > 12) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+    // Ambiguous — assume day-first (Irish/UK/EU default)
+    return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
   }
+
+  // DD/MM/YY (2-digit year)
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})$/);
+  if (m) {
+    const yy = parseInt(m[3]);
+    const yyyy = yy < 50 ? 2000 + yy : 1900 + yy;
+    return `${yyyy}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  }
+
+  // "5 May 2026" or "5-May-2026"
+  const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  m = s.match(/^(\d{1,2})[\s\-]+([A-Za-z]{3,})[\s\-]+(\d{2,4})$/);
+  if (m) {
+    const mn = months[m[2].toLowerCase().slice(0,3)];
+    if (mn) {
+      let y = parseInt(m[3]);
+      if (y < 100) y = y < 50 ? 2000 + y : 1900 + y;
+      return `${y}-${String(mn).padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    }
+  }
+
+  // "May 5, 2026" / "May 5 2026"
+  m = s.match(/^([A-Za-z]{3,})\s+(\d{1,2}),?\s+(\d{2,4})$/);
+  if (m) {
+    const mn = months[m[1].toLowerCase().slice(0,3)];
+    if (mn) {
+      let y = parseInt(m[3]);
+      if (y < 100) y = y < 50 ? 2000 + y : 1900 + y;
+      return `${y}-${String(mn).padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+    }
+  }
+
+  // Last resort — try Date.parse
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+
   return null;
 }
 
-function cleanAmount(s) {
-  if (!s) return '';
-  return s.replace(/"/g, '').replace(/[€$£¥,\s]/g, '').trim();
+// Parse number handling EU/US formats, parentheses, DR/CR suffixes, currency symbols
+function parseAmount(raw) {
+  if (raw === null || raw === undefined) return null;
+  let s = String(raw).replace(/"/g, '').trim();
+  if (!s) return null;
+
+  let isNegative = false;
+  // Parentheses notation: (100) = -100
+  if (/^\(.*\)$/.test(s)) { isNegative = true; s = s.slice(1, -1); }
+  // Trailing minus: 100- = -100
+  if (/-$/.test(s)) { isNegative = true; s = s.slice(0, -1); }
+  // DR/CR suffixes
+  if (/\s*DR\s*$/i.test(s)) { isNegative = true; s = s.replace(/\s*DR\s*$/i, ''); }
+  if (/\s*CR\s*$/i.test(s)) { s = s.replace(/\s*CR\s*$/i, ''); }
+  // Leading minus
+  if (/^-/.test(s)) { isNegative = true; s = s.slice(1); }
+  // Strip currency symbols & spaces
+  s = s.replace(/[€$£¥₹\s]/g, '').replace(/[A-Z]{3}$/i, '').trim();
+  if (!s) return null;
+
+  // Detect EU vs US format
+  // EU: 1.234,56 — comma is decimal, dot is thousand
+  // US: 1,234.56 — dot is decimal, comma is thousand
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma > lastDot) {
+    // EU: comma is decimal
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    // US or no decimal: strip commas
+    s = s.replace(/,/g, '');
+  }
+
+  const n = parseFloat(s);
+  if (isNaN(n)) return null;
+  return isNegative ? -n : n;
 }
 
+// Comprehensive column detection across known bank formats
 function detectColumns(header) {
-  const h = header.map(x => x.toLowerCase());
-  const find = (patterns) => h.findIndex(x => patterns.some(p => x.includes(p)));
-  return {
-    date:   find(['posted transaction', 'completed date', 'transaction date', 'started date', 'posted date', 'value date', 'date']),
-    desc:   find(['description1', 'description', 'details', 'narrative', 'merchant', 'reference', 'name', 'payee']),
-    debit:  find(['debit', 'withdrawal', 'money out', 'paid out']),
-    credit: find(['credit', 'deposit', 'money in', 'paid in']),
-    amount: find(['amount', 'transaction amount', 'value']),
+  const h = header.map(x => x.toLowerCase().trim());
+  const findOne = (patterns) => {
+    for (const p of patterns) {
+      const idx = h.findIndex(x => x === p || x.includes(p));
+      if (idx !== -1) return idx;
+    }
+    return -1;
   };
+  return {
+    date: findOne([
+      'posted transactions date', 'posted transaction date', 'completed date',
+      'transaction date', 'started date', 'posted date', 'value date',
+      'booking date', 'date completed', 'finished on', 'created on',
+      'created', 'date posted', 'transaction time', 'date'
+    ]),
+    desc: findOne([
+      'description1', 'description', 'details', 'narrative', 'merchant',
+      'counter party', 'partner name', 'payee', 'name', 'reference',
+      'memo', 'subject', 'transaction details', 'particulars'
+    ]),
+    debit: findOne([
+      'debit amount', 'debit', 'withdrawal', 'withdrawals',
+      'money out', 'paid out', 'out', 'spent', 'expense'
+    ]),
+    credit: findOne([
+      'credit amount', 'credit', 'deposit', 'deposits',
+      'money in', 'paid in', 'in', 'received', 'income'
+    ]),
+    amount: findOne([
+      'transaction amount', 'amount (eur)', 'amount (gbp)', 'amount (usd)',
+      'local amount', 'amount', 'value', 'gross', 'net'
+    ]),
+    type: findOne(['type', 'transaction type', 'direction', 'dr/cr']),
+    category: findOne(['category', 'spending category']),
+  };
+}
+
+// Find the actual header row (skips preamble rows banks add)
+function findHeaderRow(lines, delim) {
+  for (let i = 0; i < Math.min(15, lines.length); i++) {
+    const cols = parseCSVLine(lines[i], delim);
+    if (cols.length < 3) continue;
+    const det = detectColumns(cols);
+    const hasDate = det.date !== -1;
+    const hasMoney = det.debit !== -1 || det.credit !== -1 || det.amount !== -1;
+    if (hasDate && hasMoney) return i;
+  }
+  return 0; // fallback to first line
 }
 
 function importCSV(event) {
@@ -416,43 +545,79 @@ function importCSV(event) {
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
-      if (lines.length < 2) return alert('❌ Empty CSV');
+      // Strip BOM, split lines, drop empties
+      let text = e.target.result.replace(/^﻿/, '');
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) return alert('❌ CSV is empty');
 
-      const header = parseCSVLine(lines[0]);
+      // Auto-detect delimiter and header row
+      const delim = detectDelimiter(lines);
+      const headerIdx = findHeaderRow(lines, delim);
+      const header = parseCSVLine(lines[headerIdx], delim);
       const cols = detectColumns(header);
 
-      // Validate: need date + desc + (debit OR credit OR amount)
       if (cols.date === -1 || cols.desc === -1 || (cols.debit === -1 && cols.credit === -1 && cols.amount === -1)) {
-        return alert('❌ Could not detect bank format.\n\nNeed columns for: Date, Description, and (Debit/Credit OR Amount).\n\nDetected headers:\n' + header.join(' | '));
+        return alert('❌ Could not detect format.\n\nNeed: Date, Description, and (Debit/Credit OR Amount).\n\nDelimiter: "' + delim + '"\nHeader row: ' + (headerIdx + 1) + '\nHeaders found:\n' + header.join(' | '));
       }
 
-      let imported = 0, skipped = 0;
-      for (let i = 1; i < lines.length; i++) {
-        const parts = parseCSVLine(lines[i]);
-        if (parts.length < 2) { skipped++; continue; }
+      let imported = 0, skipped = 0, skipReasons = {};
+      const log = (reason) => { skipReasons[reason] = (skipReasons[reason] || 0) + 1; skipped++; };
+
+      for (let i = headerIdx + 1; i < lines.length; i++) {
+        const parts = parseCSVLine(lines[i], delim);
+        if (parts.length < 2) { log('too few columns'); continue; }
+
+        // Skip footer rows (totals, balances, etc.)
+        const lineLower = lines[i].toLowerCase();
+        if (/^(total|opening|closing|balance|sum)/i.test(parts[0]) || /\b(end of statement|page \d)/i.test(lineLower)) { log('footer row'); continue; }
 
         const date = parseAnyDate(parts[cols.date] || '');
         const desc = (parts[cols.desc] || '').replace(/"/g, '').trim();
-        if (!date || !desc) { skipped++; continue; }
+        if (!date) { log('bad date'); continue; }
+        if (!desc) { log('no description'); continue; }
 
         let amountVal = 0, isIncome = false;
         if (cols.debit !== -1 || cols.credit !== -1) {
-          // Two-column format (AIB, BOI, PTSB)
-          const debit  = parseFloat(cleanAmount(parts[cols.debit]  || '')) || 0;
-          const credit = parseFloat(cleanAmount(parts[cols.credit] || '')) || 0;
-          if (debit > 0)       { amountVal = debit;  isIncome = false; }
-          else if (credit > 0) { amountVal = credit; isIncome = true;  }
+          // Two-column format (AIB, BOI, PTSB, HSBC, Santander)
+          const debit  = parseAmount(parts[cols.debit]  || '') || 0;
+          const credit = parseAmount(parts[cols.credit] || '') || 0;
+          if (Math.abs(debit) > 0)       { amountVal = Math.abs(debit);  isIncome = false; }
+          else if (Math.abs(credit) > 0) { amountVal = Math.abs(credit); isIncome = true;  }
         } else {
-          // Single amount column (Revolut, Wise) — negative = spending
-          const raw = parseFloat(cleanAmount(parts[cols.amount] || '')) || 0;
-          if (raw === 0) { skipped++; continue; }
-          amountVal = Math.abs(raw);
-          isIncome = raw > 0;
-        }
-        if (!amountVal) { skipped++; continue; }
+          // Single amount column — sign determines direction
+          // Convention: negative = spending (Revolut, Wise, Monzo, Starling, AMEX)
+          const raw = parseAmount(parts[cols.amount] || '');
+          if (raw === null || raw === 0) { log('zero/no amount'); continue; }
 
+          // Use Type column hint if present
+          let typeHint = (cols.type !== -1 ? (parts[cols.type] || '') : '').toLowerCase();
+          amountVal = Math.abs(raw);
+          if (raw < 0) isIncome = false;
+          else if (raw > 0) {
+            // Positive — could be income or spending depending on convention
+            // AMEX/credit cards: positive = charge (spending). Bank statements: positive = credit.
+            // If type column hints "payment"/"refund"/"credit" → income; "purchase"/"debit" → spending
+            if (/payment|refund|credit|deposit|salary|received/i.test(typeHint)) isIncome = true;
+            else if (/purchase|debit|charge|withdrawal|fee/i.test(typeHint)) isIncome = false;
+            else isIncome = true; // default: positive = money in
+          }
+        }
+        if (!amountVal) { log('zero amount'); continue; }
+
+        // Use category from CSV if present, otherwise auto-categorize
         let cat = 'Personal & Discretionary';
+        if (cols.category !== -1 && parts[cols.category]) {
+          const csvCat = parts[cols.category].toLowerCase();
+          // Map common CSV categories to our buckets
+          if (/grocer|food|supermarket/.test(csvCat)) cat = 'Groceries';
+          else if (/transport|fuel|petrol|taxi|travel/.test(csvCat)) cat = 'Fuel & Transport';
+          else if (/util|bill/.test(csvCat)) cat = 'Utilities & Bills';
+          else if (/subscript|entertain/.test(csvCat)) cat = 'Subscriptions';
+          else if (/restaurant|coffee|eating/.test(csvCat)) cat = 'Eating Out & Coffee';
+          else if (/health|fitness|medical/.test(csvCat)) cat = 'Health & Fitness';
+          else if (/kid|child|family/.test(csvCat)) cat = 'Kids & Family';
+        }
+        // Auto-categorize from description
         for (const [c, regex] of Object.entries(csvAutoCategories)) {
           if (regex.test(desc)) { cat = c; break; }
         }
@@ -466,12 +631,15 @@ function importCSV(event) {
         imported++;
       }
 
-      if (imported === 0) return alert(`❌ Could not import any transactions.\n\nSkipped: ${skipped} rows.\n\nDetected columns:\n  Date: ${header[cols.date] || 'NOT FOUND'}\n  Desc: ${header[cols.desc] || 'NOT FOUND'}\n  Debit: ${header[cols.debit] || 'n/a'}\n  Credit: ${header[cols.credit] || 'n/a'}\n  Amount: ${header[cols.amount] || 'n/a'}`);
+      if (imported === 0) {
+        const reasons = Object.entries(skipReasons).map(([r,c]) => `  ${r}: ${c}`).join('\n');
+        return alert(`❌ Could not import any transactions.\n\nDelimiter: "${delim}"\nHeader row: ${headerIdx + 1}\nDate col: ${header[cols.date] || 'NOT FOUND'}\nDesc col: ${header[cols.desc] || 'NOT FOUND'}\nDebit col: ${header[cols.debit] || 'n/a'}\nCredit col: ${header[cols.credit] || 'n/a'}\nAmount col: ${header[cols.amount] || 'n/a'}\n\nSkipped (${skipped}):\n${reasons}`);
+      }
       save();
       render();
-      alert(`✅ Imported ${imported} transactions!\n${skipped > 0 ? `(${skipped} rows skipped)` : ''}`);
+      alert(`✅ Imported ${imported} transactions${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
     } catch (err) {
-      alert('❌ Error: ' + err.message);
+      alert('❌ Error: ' + err.message + '\n\n' + err.stack);
     }
   };
   reader.readAsText(file);
