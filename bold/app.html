@@ -1025,7 +1025,7 @@ function renderRings() {
     const offset = circumference - (pct / 100) * circumference;
     const showPct = budget > 0 ? `${pct.toFixed(0)}%` : '—';
     return `
-      <div class="ring-card">
+      <div class="ring-card" onclick="drillIntoCategory('${cat}')" style="cursor: pointer;" title="Click to see ${cat} transactions">
         <svg class="ring-svg" viewBox="0 0 100 100">
           <circle class="ring-bg" cx="50" cy="50" r="${radius}"></circle>
           <circle class="ring-fg" cx="50" cy="50" r="${radius}"
@@ -1080,10 +1080,52 @@ function renderHeatmap() {
       level = ratio > 0.75 ? 4 : ratio > 0.5 ? 3 : ratio > 0.25 ? 2 : 1;
     }
     const cls = isFuture ? 'future' : `h${level}`;
-    const tip = spent > 0 ? `${dateStr}: €${spent.toFixed(2)}` : `${dateStr}: nothing spent`;
-    html += `<div class="heatmap-day ${cls}" title="${tip}">${d}</div>`;
+    const tip = spent > 0 ? `${dateStr}: €${spent.toFixed(2)} (click to view)` : `${dateStr}: nothing spent`;
+    const click = !isFuture && spent > 0 ? `onclick="drillIntoDate('${dateStr}')" style="cursor:pointer;"` : '';
+    html += `<div class="heatmap-day ${cls}" title="${tip}" ${click}>${d}</div>`;
   }
   grid.innerHTML = html;
+}
+
+// ====== v1.5 Drill-down from rings ======
+function drillIntoCategory(cat) {
+  // Switch to Stats/Transactions tab
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.emoji-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('transactions').classList.add('active');
+  // Mark Stats nav button active (3rd in emoji-nav)
+  const navBtns = document.querySelectorAll('.emoji-nav button');
+  if (navBtns[2]) navBtns[2].classList.add('active');
+  // Reset filters and apply category
+  ['txSearch','txFrom','txTo'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('txType').value = 'all';
+  document.getElementById('txAcc').value = 'all';
+  document.getElementById('txSort').value = 'date-desc';
+  window._minAmount = 0;
+  // Populate dropdowns then set category
+  populateTxFilterDropdowns();
+  document.getElementById('txCat').value = cat;
+  document.querySelectorAll('#quickChips .chip').forEach(c => c.classList.remove('active'));
+  renderAllTransactions();
+  window.scrollTo(0, 0);
+}
+
+function drillIntoDate(dateStr) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.emoji-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('transactions').classList.add('active');
+  const navBtns = document.querySelectorAll('.emoji-nav button');
+  if (navBtns[2]) navBtns[2].classList.add('active');
+  ['txSearch'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['txType','txCat','txAcc'].forEach(id => { const el = document.getElementById(id); if (el) el.value = 'all'; });
+  document.getElementById('txFrom').value = dateStr;
+  document.getElementById('txTo').value = dateStr;
+  document.getElementById('txSort').value = 'date-desc';
+  window._minAmount = 0;
+  populateTxFilterDropdowns();
+  document.querySelectorAll('#quickChips .chip').forEach(c => c.classList.remove('active'));
+  renderAllTransactions();
+  window.scrollTo(0, 0);
 }
 
 // ====== v1.5 Quick chips ======
