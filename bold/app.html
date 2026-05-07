@@ -296,7 +296,12 @@
 
 <header>
   <div class="logo">💰 Noel</div>
-  <div style="display: flex; gap: 12px; align-items: center;">
+  <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+    <select id="contextSelect" onchange="setActiveContext()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text); font-weight: 700; cursor: pointer;">
+      <option value="all">🌐 All</option>
+      <option value="personal">🏠 Personal</option>
+      <option value="business">🏢 Business</option>
+    </select>
     <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme" id="themeToggleBtn">🌙</button>
     <button class="btn btn-primary" style="padding: 8px 16px; font-size: 0.9rem;" onclick="switchSection(null, 'daily-log')">Quick Add</button>
   </div>
@@ -665,6 +670,24 @@
     </div>
 
     <div class="form-card">
+      <h3>🏠🏢 Personal vs Business</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Tag each account so you can flip between contexts in the header. Budgets, charts, and AI all filter accordingly.</p>
+      <div id="accountTypeList"></div>
+
+      <h4 style="margin-top: 20px; margin-bottom: 8px; color: var(--text);">Budgets per context</h4>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>🏠 Personal weekly target</label>
+          <input type="number" id="personalBudget" step="0.01" placeholder="1725" oninput="saveContextBudgets()">
+        </div>
+        <div class="form-group">
+          <label>🏢 Business weekly target</label>
+          <input type="number" id="businessBudget" step="0.01" placeholder="0" oninput="saveContextBudgets()">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card">
       <h3>💱 Currency</h3>
       <div class="form-grid">
         <div class="form-group">
@@ -788,6 +811,79 @@ let voiceListening = false;
 // v1.10 data
 let netWorthHistory = JSON.parse(localStorage.getItem('netWorthHistory') || '[]');
 
+// v1.14 Personal/Business context
+const defaultAccountTypes = {
+  'AIB Personal': 'personal',
+  'AIB Business': 'business',
+  'Revolut': 'personal',
+  'Credit Union': 'personal',
+  'Cash': 'personal',
+};
+let accountTypes = JSON.parse(localStorage.getItem('accountTypes') || JSON.stringify(defaultAccountTypes));
+let activeContext = localStorage.getItem('activeContext') || 'all';
+// Per-context weekly budget (object keyed by 'personal'/'business')
+let contextBudgets = JSON.parse(localStorage.getItem('contextBudgets') || '{"personal": 1725, "business": 0}');
+
+function getAccountType(acc) { return accountTypes[acc] || defaultAccountTypes[acc] || 'personal'; }
+function inActiveContext(item) {
+  if (activeContext === 'all') return true;
+  return getAccountType(item.account || '') === activeContext;
+}
+// Filter helpers — call these instead of using txns/income directly when rendering context-aware views
+function ctxTxns() { return activeContext === 'all' ? txns : txns.filter(inActiveContext); }
+function ctxIncome() { return activeContext === 'all' ? income : income.filter(inActiveContext); }
+function ctxWeeklyBudget() {
+  if (activeContext === 'all') return weeklyBudget;
+  return contextBudgets[activeContext] || 0;
+}
+
+function setActiveContext() {
+  const sel = document.getElementById('contextSelect');
+  if (!sel) return;
+  activeContext = sel.value;
+  localStorage.setItem('activeContext', activeContext);
+  showToast(`📊 ${activeContext === 'all' ? 'All accounts' : activeContext === 'personal' ? '🏠 Personal mode' : '🏢 Business mode'}`);
+  alertedThisSession = {}; // re-arm alerts for new context
+  render();
+}
+
+function renderAccountTypeList() {
+  const list = document.getElementById('accountTypeList');
+  if (!list) return;
+  list.innerHTML = accounts.map(a => {
+    const type = getAccountType(a);
+    return `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--bg-soft); border-radius: 8px; margin-bottom: 6px;">
+        <span style="font-weight: 700;">${a}</span>
+        <select onchange="setAccountType('${a}', this.value)" style="padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text); cursor: pointer;">
+          <option value="personal" ${type === 'personal' ? 'selected' : ''}>🏠 Personal</option>
+          <option value="business" ${type === 'business' ? 'selected' : ''}>🏢 Business</option>
+        </select>
+      </div>`;
+  }).join('');
+  // Sync per-context budget inputs
+  const pb = document.getElementById('personalBudget');
+  const bb = document.getElementById('businessBudget');
+  if (pb && document.activeElement !== pb) pb.value = contextBudgets.personal || '';
+  if (bb && document.activeElement !== bb) bb.value = contextBudgets.business || '';
+}
+
+function setAccountType(account, type) {
+  accountTypes[account] = type;
+  save();
+  showToast(`${account} → ${type === 'personal' ? '🏠 Personal' : '🏢 Business'}`);
+  render();
+}
+
+function saveContextBudgets() {
+  const pb = parseFloat(document.getElementById('personalBudget')?.value) || 0;
+  const bb = parseFloat(document.getElementById('businessBudget')?.value) || 0;
+  contextBudgets.personal = pb;
+  contextBudgets.business = bb;
+  save();
+  if (activeContext !== 'all') render();
+}
+
 const categories = ['Groceries', 'Fuel & Transport', 'Utilities & Bills', 'Subscriptions', 'Eating Out & Coffee', 'Kids & Family', 'Health & Fitness', 'Personal & Discretionary'];
 const accounts = ['AIB Personal', 'AIB Business', 'Revolut', 'Credit Union', 'Cash'];
 
@@ -805,6 +901,8 @@ function save() {
   localStorage.setItem('saveRules', JSON.stringify(saveRules));
   localStorage.setItem('baseCurrency', baseCurrency);
   localStorage.setItem('netWorthHistory', JSON.stringify(netWorthHistory));
+  localStorage.setItem('accountTypes', JSON.stringify(accountTypes));
+  localStorage.setItem('contextBudgets', JSON.stringify(contextBudgets));
 }
 
 function switchSection(event, sectionId) {
@@ -3917,6 +4015,20 @@ function renderCharts() {
 }
 
 function render() {
+  // v1.14: Apply active context filter — temporarily replace globals
+  const _origTxns = txns;
+  const _origIncome = income;
+  const _origBudget = weeklyBudget;
+  if (activeContext !== 'all') {
+    txns = ctxTxns();
+    income = ctxIncome();
+    weeklyBudget = ctxWeeklyBudget();
+  }
+  // Sync context selector with state
+  const ctxSel = document.getElementById('contextSelect');
+  if (ctxSel && ctxSel.value !== activeContext) ctxSel.value = activeContext;
+
+  try {
   const { start, end } = getWeekRange();
   document.getElementById('weekRange').textContent = `${start} — ${end}`;
 
@@ -3999,12 +4111,20 @@ function render() {
 
   // v1.10 polish
   if (document.getElementById('netWorthHistoryChart')) renderNetWorthHistory();
+  // v1.14 context UI
+  if (document.getElementById('accountTypeList')) renderAccountTypeList();
   // Attach swipe + ripple after DOM updates
   setTimeout(() => { attachSwipeHandlers(); attachRipples(); }, 50);
 
   filterTransactions();
   renderCharts();
   if (document.getElementById('allTransactionsList')) renderAllTransactions();
+  } finally {
+    // v1.14: Restore original full data so editors and adders see everything
+    txns = _origTxns;
+    income = _origIncome;
+    weeklyBudget = _origBudget;
+  }
 }
 
 render();
