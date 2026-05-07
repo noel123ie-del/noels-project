@@ -162,48 +162,39 @@ function importCSV(event) {
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const lines = e.target.result.split('\n').map(l => l.trim()).filter(l => l);
+      const lines = e.target.result.split('\n').filter(l => l.trim());
       if (lines.length < 2) return alert('❌ Empty CSV');
 
       let imported = 0;
       for (let i = 1; i < lines.length; i++) {
-        // Parse CSV with quoted field support
-        const cols = [];
-        let curr = '', inQuotes = false;
-        for (let c of lines[i]) {
-          if (c === '"') inQuotes = !inQuotes;
-          else if (c === ',' && !inQuotes) { cols.push(curr.trim()); curr = ''; }
-          else curr += c;
-        }
-        cols.push(curr.trim());
+        // Simple comma split for AIB CSV
+        const parts = lines[i].split(',');
 
         // AIB columns: 0=account, 1=DATE, 2=DESC, 3=desc2, 4=desc3, 5=DEBIT, 6=CREDIT
-        if (cols.length < 7) continue;
+        if (parts.length < 7) continue;
 
-        const dateStr = cols[1];
-        const desc = cols[2];
-        const debit = (cols[5] || '').replace(/[€$£¥,\s]/g, '');
-        const credit = (cols[6] || '').replace(/[€$£¥,\s]/g, '');
+        // Remove quotes and clean
+        const date = parts[1].replace(/"/g, '').trim();
+        const desc = parts[2].replace(/"/g, '').trim();
+        const debit = parts[5].replace(/"/g, '').replace(/[€$£¥,\s]/g, '').trim();
+        const credit = parts[6].replace(/"/g, '').replace(/[€$£¥,\s]/g, '').trim();
 
-        if (!dateStr || !desc) continue;
+        if (!date || !desc) continue;
 
         // Parse date DD/MM/YYYY to YYYY-MM-DD
-        let date = null;
-        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-          const p = dateStr.split('/');
-          date = `${p[2]}-${p[1]}-${p[0]}`;
-        }
-        if (!date) continue;
+        const dateParts = date.split('/');
+        if (!/^\d{2}\/\d{2}\/\d{4}$/.test(date)) continue;
+        const convertedDate = dateParts[2] + '-' + dateParts[1] + '-' + dateParts[0];
 
-        const amount = Math.abs(parseFloat(debit || credit || '0'));
-        if (amount === 0) continue;
+        const amount = debit ? parseFloat(debit) : parseFloat(credit);
+        if (!amount) continue;
 
         let cat = 'Other';
         for (const [c, regex] of Object.entries(autoCategories)) {
           if (regex.test(desc)) { cat = c; break; }
         }
 
-        txns.push({ id: Date.now() + Math.random(), date, amount, category: cat, desc });
+        txns.push({ id: Date.now() + Math.random(), date: convertedDate, amount: Math.abs(amount), category: cat, desc });
         imported++;
       }
 
