@@ -323,6 +323,15 @@
     <!-- Spending alerts banner -->
     <div id="alertBanner" style="display: none;"></div>
 
+    <!-- Personal vs Business side-by-side (only shows when context = All) -->
+    <div id="splitView" style="display: none; margin-bottom: 24px;">
+      <h3 style="margin-bottom: 12px; color: var(--text);">🏠🏢 Personal & Business — This Week</h3>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+        <div id="splitPersonal" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; padding: 24px; border-radius: 16px; cursor: pointer; box-shadow: 0 8px 20px rgba(67,233,123,0.3);" onclick="document.getElementById('contextSelect').value='personal';setActiveContext();"></div>
+        <div id="splitBusiness" style="background: linear-gradient(135deg, #1f3a5f 0%, #4a7baa 100%); color: white; padding: 24px; border-radius: 16px; cursor: pointer; box-shadow: 0 8px 20px rgba(74,123,170,0.3);" onclick="document.getElementById('contextSelect').value='business';setActiveContext();"></div>
+      </div>
+    </div>
+
     <!-- Payday-to-payday card (only if payday set) -->
     <div id="paydayCard" style="display: none;" class="form-card">
       <h3>📆 Payday Cycle</h3>
@@ -873,6 +882,45 @@ function setAccountType(account, type) {
   save();
   showToast(`${account} → ${type === 'personal' ? '🏠 Personal' : '🏢 Business'}`);
   render();
+}
+
+function renderSplitView() {
+  const split = document.getElementById('splitView');
+  const p = document.getElementById('splitPersonal');
+  const b = document.getElementById('splitBusiness');
+  if (!split || !p || !b) return;
+  // Only show when in "All" mode
+  if (activeContext !== 'all') { split.style.display = 'none'; return; }
+  split.style.display = 'block';
+
+  const wr = getWeekRange();
+  // Use FULL data (we're in all mode so txns/income are already full)
+  const personalTxns = txns.filter(t => getAccountType(t.account || '') === 'personal' && t.date >= wr.start && t.date <= wr.end);
+  const businessTxns = txns.filter(t => getAccountType(t.account || '') === 'business' && t.date >= wr.start && t.date <= wr.end);
+  const pSpent = personalTxns.reduce((s, t) => s + t.amount, 0);
+  const bSpent = businessTxns.reduce((s, t) => s + t.amount, 0);
+  const pBudget = contextBudgets.personal || 0;
+  const bBudget = contextBudgets.business || 0;
+  const pPct = pBudget > 0 ? Math.min(100, (pSpent / pBudget) * 100) : 0;
+  const bPct = bBudget > 0 ? Math.min(100, (bSpent / bBudget) * 100) : 0;
+
+  p.innerHTML = `
+    <div style="opacity: 0.85; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">🏠 Personal</div>
+    <div style="font-size: 2.4rem; font-weight: 900; line-height: 1.1; margin: 8px 0;">${currencySymbol()}${pSpent.toFixed(2)}</div>
+    <div style="opacity: 0.9; font-size: 0.9rem;">${pBudget > 0 ? `${pPct.toFixed(0)}% of ${currencySymbol()}${pBudget} target` : 'No target set'}</div>
+    <div style="background: rgba(255,255,255,0.25); height: 6px; border-radius: 3px; margin-top: 10px; overflow: hidden;">
+      <div style="background: white; height: 100%; width: ${pPct}%; transition: width 0.6s;"></div>
+    </div>
+    <div style="opacity: 0.85; font-size: 0.8rem; margin-top: 8px;">${personalTxns.length} txns this week · click to focus</div>`;
+
+  b.innerHTML = `
+    <div style="opacity: 0.85; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">🏢 Business</div>
+    <div style="font-size: 2.4rem; font-weight: 900; line-height: 1.1; margin: 8px 0;">${currencySymbol()}${bSpent.toFixed(2)}</div>
+    <div style="opacity: 0.9; font-size: 0.9rem;">${bBudget > 0 ? `${bPct.toFixed(0)}% of ${currencySymbol()}${bBudget} target` : 'No target set'}</div>
+    <div style="background: rgba(255,255,255,0.25); height: 6px; border-radius: 3px; margin-top: 10px; overflow: hidden;">
+      <div style="background: white; height: 100%; width: ${bPct}%; transition: width 0.6s;"></div>
+    </div>
+    <div style="opacity: 0.85; font-size: 0.8rem; margin-top: 8px;">${businessTxns.length} txns this week · click to focus</div>`;
 }
 
 function saveContextBudgets() {
@@ -4113,6 +4161,12 @@ function render() {
   if (document.getElementById('netWorthHistoryChart')) renderNetWorthHistory();
   // v1.14 context UI
   if (document.getElementById('accountTypeList')) renderAccountTypeList();
+  // v1.15 split view (only in all mode — uses _origTxns since txns may be filtered)
+  if (document.getElementById('splitView')) {
+    const _t = txns; const _i = income;
+    txns = _origTxns; income = _origIncome;
+    try { renderSplitView(); } finally { txns = _t; income = _i; }
+  }
   // Attach swipe + ripple after DOM updates
   setTimeout(() => { attachSwipeHandlers(); attachRipples(); }, 50);
 
