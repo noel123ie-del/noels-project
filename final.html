@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Thrift - Smart spending tracker. Track expenses, analyze spending patterns, set budgets, and take control of your money." />
+  <meta name="keywords" content="spending tracker, budget app, expense tracker, personal finance, money management" />
+  <meta name="author" content="Thrift" />
+  <meta property="og:title" content="Thrift - Smart Spending Tracker" />
+  <meta property="og:description" content="Know exactly where your money goes. Beautiful charts. Smart insights. No complexity." />
+  <meta property="og:type" content="website" />
+  <title>Thrift - Smart Spending Tracker & Budget App</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0a0e27;
+      color: #e5e7eb;
+      line-height: 1.6;
+    }
+    header {
+      border-bottom: 1px solid rgba(0,212,255,0.1);
+      padding: 20px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+    .logo { font-size: 1.4rem; font-weight: 800; color: #00d4ff; }
+    .btn { padding: 10px 20px; border: none; background: linear-gradient(135deg, #00d4ff, #0099ff); color: #000; border-radius: 8px; cursor: pointer; font-weight: 700; transition: all 0.3s; }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,212,255,0.3); }
+    nav { background: rgba(10,14,39,0.95); border-bottom: 1px solid rgba(0,212,255,0.1); padding: 0 24px; display: flex; overflow-x: auto; }
+    nav button { border: none; background: none; padding: 14px 20px; font-size: 0.9rem; color: #6b7280; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.3s; white-space: nowrap; font-weight: 600; }
+    nav button.active { color: #00d4ff; border-bottom-color: #00d4ff; }
+    nav button:hover { color: #00d4ff; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+    .section { display: none; animation: fadeIn 0.4s ease-in; }
+    .section.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    h2 { font-size: 1.8rem; margin-bottom: 24px; color: #fff; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.2); border-radius: 12px; padding: 24px; }
+    .stat-label { font-size: 0.8rem; color: #6b7280; text-transform: uppercase; margin-bottom: 8px; }
+    .stat-value { font-size: 2rem; font-weight: 800; color: #00d4ff; }
+    .card { background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.1); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+    .card h3 { font-size: 1.2rem; margin-bottom: 16px; color: #fff; }
+    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 16px; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group label { font-size: 0.85rem; font-weight: 600; color: #a0aec0; margin-bottom: 6px; text-transform: uppercase; }
+    .form-group input, .form-group select { padding: 10px 12px; border: 1px solid rgba(0,212,255,0.2); background: rgba(0,212,255,0.05); border-radius: 8px; color: #e5e7eb; font-size: 0.9rem; transition: all 0.3s; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #00d4ff; box-shadow: 0 0 0 3px rgba(0,212,255,0.1); }
+    .btn-primary { background: linear-gradient(135deg, #00d4ff, #0099ff); color: #000; padding: 12px 24px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; transition: all 0.3s; }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,212,255,0.3); }
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 24px; }
+    .chart-container { background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.1); border-radius: 12px; padding: 20px; }
+    .chart-wrapper { position: relative; height: 280px; }
+    .search-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .search-bar input, .search-bar select { padding: 10px 12px; border: 1px solid rgba(0,212,255,0.2); background: rgba(0,212,255,0.05); border-radius: 8px; color: #e5e7eb; font-size: 0.9rem; flex: 1; min-width: 120px; }
+    .transaction-list { background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.1); border-radius: 12px; overflow: hidden; }
+    .transaction-item { padding: 14px 16px; border-bottom: 1px solid rgba(0,212,255,0.1); display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; }
+    .transaction-item:last-child { border-bottom: none; }
+    .transaction-item:hover { background: rgba(0,212,255,0.1); }
+    .transaction-info { flex: 1; }
+    .transaction-desc { font-weight: 600; color: #fff; margin-bottom: 4px; }
+    .transaction-meta { font-size: 0.8rem; color: #6b7280; }
+    .transaction-amount { font-weight: 800; color: #00d4ff; text-align: right; }
+    .delete-btn { background: none; border: none; color: #6b7280; cursor: pointer; font-size: 1.2rem; transition: all 0.2s; }
+    .delete-btn:hover { color: #ff4757; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    thead { background: rgba(0,212,255,0.05); border-bottom: 1px solid rgba(0,212,255,0.2); }
+    th { padding: 12px; text-align: left; font-weight: 700; color: #00d4ff; text-transform: uppercase; font-size: 0.75rem; }
+    td { padding: 12px; border-bottom: 1px solid rgba(0,212,255,0.1); color: #a0aec0; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #6b7280; }
+    @media (max-width: 768px) {
+      header { flex-direction: column; gap: 12px; }
+      nav { padding: 0 16px; }
+      .container { padding: 20px 16px; }
+      .charts-grid { grid-template-columns: 1fr; }
+      .form-row { grid-template-columns: 1fr; }
+      .search-bar { flex-direction: column; }
+      .search-bar input, .search-bar select { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">◆ THRIFT</div>
+  <button class="btn" onclick="document.getElementById('settings').scrollIntoView()">Settings</button>
+</header>
+
+<nav>
+  <button class="active" onclick="switchTab('dashboard')">Dashboard</button>
+  <button onclick="switchTab('add-spending')">Add Spending</button>
+  <button onclick="switchTab('insights')">Insights</button>
+  <button onclick="switchTab('settings')">Settings</button>
+</nav>
+
+<div class="container">
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="section active">
+    <h2>Your Money Overview</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">This Week</div>
+        <div class="stat-value" id="weekSpent">€0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">This Month</div>
+        <div class="stat-value" id="monthSpent">€0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Income</div>
+        <div class="stat-value" id="totalIncome">€0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Balance</div>
+        <div class="stat-value" id="netWorth">€0</div>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-container">
+        <h3 style="margin-bottom: 12px;">📊 Spending by Category</h3>
+        <div class="chart-wrapper"><canvas id="categoryChart"></canvas></div>
+      </div>
+      <div class="chart-container">
+        <h3 style="margin-bottom: 12px;">📈 6-Month Trend</h3>
+        <div class="chart-wrapper"><canvas id="trendChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>💡 Detected Subscriptions</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Amount</th>
+            <th>Frequency</th>
+            <th>Annual</th>
+          </tr>
+        </thead>
+        <tbody id="recurringTable">
+          <tr><td colspan="4" style="text-align: center; color: #6b7280;">Import data to see subscriptions</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>📝 Recent Transactions</h3>
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search..." onkeyup="filterTransactions()">
+        <select id="categoryFilter" onchange="filterTransactions()">
+          <option value="">All Categories</option>
+          <option value="Food">Food</option>
+          <option value="Transport">Transport</option>
+          <option value="Shopping">Shopping</option>
+          <option value="Entertainment">Entertainment</option>
+          <option value="Utilities">Utilities</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="transaction-list" id="transactionsList"></div>
+    </div>
+  </div>
+
+  <!-- Add Spending -->
+  <div id="add-spending" class="section">
+    <h2>Add Spending</h2>
+    <div class="card">
+      <h3>Log Your Expense</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="logDate">
+        </div>
+        <div class="form-group">
+          <label>Amount (€)</label>
+          <input type="number" id="logAmount" placeholder="0.00" step="0.01">
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="logCategory">
+            <option>Food</option>
+            <option>Transport</option>
+            <option>Shopping</option>
+            <option>Entertainment</option>
+            <option>Utilities</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <input type="text" id="logDesc" placeholder="What was it for?">
+      </div>
+      <button class="btn-primary" onclick="addSpending()" style="margin-top: 16px;">Add Expense</button>
+    </div>
+
+    <div class="card">
+      <h3>Today's Spending</h3>
+      <div id="todayList"></div>
+    </div>
+  </div>
+
+  <!-- Insights -->
+  <div id="insights" class="section">
+    <h2>Financial Insights</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Weekly</div>
+        <div class="stat-value" id="insWeek">€0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Monthly</div>
+        <div class="stat-value" id="insMonth">€0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Income</div>
+        <div class="stat-value" id="insIncome">€0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Remaining</div>
+        <div class="stat-value" id="insRemaining">€0</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>6-Month Summary</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th>Income</th>
+            <th>Spending</th>
+            <th>Balance</th>
+          </tr>
+        </thead>
+        <tbody id="sixMonthTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div id="settings" class="section">
+    <h2>Settings</h2>
+
+    <div class="card">
+      <h3>💰 Budget Settings</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Weekly Budget (€)</label>
+          <input type="number" id="weeklyBudgetInput" placeholder="0.00" step="0.01">
+        </div>
+        <div class="form-group">
+          <label>Alert When Spent (%)</label>
+          <input type="number" id="alertInput" placeholder="75" min="0" max="100">
+        </div>
+      </div>
+      <button class="btn-primary" onclick="saveBudgetSettings()">Save Settings</button>
+    </div>
+
+    <div class="card">
+      <h3>📥 Import Bank Data</h3>
+      <p style="color: #a0aec0; margin-bottom: 12px; font-size: 0.9rem;">Works with any bank CSV format</p>
+      <div style="border: 2px dashed rgba(0,212,255,0.3); border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; transition: all 0.3s;" ondrop="handleDrop(event)" ondragover="event.preventDefault()">
+        <p style="font-weight: 700; margin-bottom: 8px;">📤 Drag & drop your CSV</p>
+        <p style="color: #6b7280; font-size: 0.9rem;">or click to browse</p>
+        <input type="file" id="csvFile" accept=".csv" onchange="importCSV(event)" style="display: none;">
+      </div>
+      <button class="btn-primary" onclick="document.getElementById('csvFile').click()" style="margin-top: 16px;">Choose File</button>
+    </div>
+
+    <div class="card">
+      <h3>⚙️ Data Management</h3>
+      <button class="btn-primary" onclick="loadSampleData()" style="margin-bottom: 12px;">Load Sample Data</button>
+      <button class="btn-primary" onclick="exportData()" style="margin-bottom: 12px; background: rgba(0,212,255,0.2);">Export Data</button>
+      <button class="btn-primary" onclick="clearData()" style="background: rgba(255,71,87,0.2);">Clear All</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let txns = JSON.parse(localStorage.getItem('txns') || '[]');
+let income = JSON.parse(localStorage.getItem('income') || '[]');
+let weeklyBudget = parseFloat(localStorage.getItem('weeklyBudget') || '0');
+let alertThreshold = parseFloat(localStorage.getItem('alertThreshold') || '75');
+let chartInstances = {};
+
+const categories = ['Food', 'Transport', 'Shopping', 'Entertainment', 'Utilities', 'Other'];
+const autoCategories = {
+  'Food': /supermarket|restaurant|cafe|coffee|pizza|burger|grocery|tesco|dunnes|lidl|aldi|food/i,
+  'Transport': /taxi|uber|bus|train|petrol|fuel|parking|transport/i,
+  'Shopping': /amazon|shop|mall|store|shopping|clothing/i,
+  'Entertainment': /cinema|movie|netflix|spotify|game|pub|entertainment/i,
+  'Utilities': /electricity|water|gas|broadband|phone|bill|utilities/i,
+};
+
+function save() {
+  localStorage.setItem('txns', JSON.stringify(txns));
+  localStorage.setItem('income', JSON.stringify(income));
+  localStorage.setItem('weeklyBudget', weeklyBudget);
+  localStorage.setItem('alertThreshold', alertThreshold);
+}
+
+function switchTab(tabName) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(tabName).classList.add('active');
+  event.target.classList.add('active');
+  render();
+}
+
+function addSpending() {
+  const date = document.getElementById('logDate').value || new Date().toISOString().split('T')[0];
+  const amount = parseFloat(document.getElementById('logAmount').value);
+  const cat = document.getElementById('logCategory').value;
+  const desc = document.getElementById('logDesc').value;
+  if (!amount || amount <= 0) return alert('Enter valid amount');
+  txns.push({ id: Date.now(), date, amount, category: cat, desc });
+  save();
+  document.getElementById('logAmount').value = '';
+  document.getElementById('logDesc').value = '';
+  render();
+}
+
+function saveBudgetSettings() {
+  weeklyBudget = parseFloat(document.getElementById('weeklyBudgetInput').value) || 0;
+  alertThreshold = parseFloat(document.getElementById('alertInput').value) || 75;
+  save();
+  alert('✅ Saved!');
+}
+
+function importCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const lines = e.target.result.split('\n').filter(l => l.trim());
+    let imported = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.trim());
+      const date = cols[0], amount = parseFloat(cols[1].replace(/[€$£¥,]/g, '')), desc = cols[2];
+      if (!date || isNaN(amount) || !desc) continue;
+      let cat = 'Other';
+      for (const [c, regex] of Object.entries(autoCategories)) {
+        if (regex.test(desc)) { cat = c; break; }
+      }
+      txns.push({ id: Date.now() + Math.random(), date, amount: Math.abs(amount), category: cat, desc });
+      imported++;
+    }
+    save();
+    render();
+    alert(`✅ Imported ${imported} transactions`);
+  };
+  reader.readAsText(file);
+}
+
+function handleDrop(event) {
+  event.preventDefault();
+  const file = event.dataTransfer.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const lines = e.target.result.split('\n').filter(l => l.trim());
+      let imported = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(c => c.trim());
+        const date = cols[0], amount = parseFloat(cols[1].replace(/[€$£¥,]/g, '')), desc = cols[2];
+        if (!date || isNaN(amount) || !desc) continue;
+        let cat = 'Other';
+        for (const [c, regex] of Object.entries(autoCategories)) {
+          if (regex.test(desc)) { cat = c; break; }
+        }
+        txns.push({ id: Date.now() + Math.random(), date, amount: Math.abs(amount), category: cat, desc });
+        imported++;
+      }
+      save();
+      render();
+      alert(`✅ Imported ${imported} transactions`);
+    };
+    reader.readAsText(file);
+  }
+}
+
+function loadSampleData() {
+  txns = [
+    {id: 1, date: '2026-05-05', amount: 45, category: 'Food', desc: 'Supermarket'},
+    {id: 2, date: '2026-05-04', amount: 15, category: 'Transport', desc: 'Bus'},
+    {id: 3, date: '2026-05-03', amount: 120, category: 'Shopping', desc: 'Clothing'},
+    {id: 4, date: '2026-05-02', amount: 8.5, category: 'Food', desc: 'Coffee'},
+  ];
+  income = [{id: 1, date: '2026-05-01', amount: 3000, desc: 'Salary'}];
+  weeklyBudget = 300;
+  save();
+  render();
+  alert('✅ Sample data loaded');
+}
+
+function exportData() {
+  const data = { txns, income, weeklyBudget, alertThreshold };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'thrift-data.json';
+  a.click();
+}
+
+function clearData() {
+  if (confirm('Delete all data?')) {
+    txns = [];
+    income = [];
+    weeklyBudget = 0;
+    alertThreshold = 75;
+    save();
+    render();
+    alert('✅ Cleared');
+  }
+}
+
+function filterTransactions() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const cat = document.getElementById('categoryFilter').value;
+  const filtered = txns.filter(t => (t.desc.toLowerCase().includes(search)) && (!cat || t.category === cat)).sort((a, b) => new Date(b.date) - new Date(a.date));
+  const html = filtered.length ? filtered.map(t => `<div class="transaction-item"><div class="transaction-info"><div class="transaction-desc">${t.desc}</div><div class="transaction-meta">${t.category} · ${t.date}</div></div><div style="text-align: right;"><div class="transaction-amount">-€${t.amount.toFixed(2)}</div><button class="delete-btn" onclick="deleteTxn(${t.id})">×</button></div></div>`).join('') : '<div class="empty-state">No transactions</div>';
+  document.getElementById('transactionsList').innerHTML = html;
+}
+
+function deleteTxn(id) {
+  txns = txns.filter(t => t.id !== id);
+  save();
+  render();
+}
+
+function detectRecurring() {
+  const recurring = {};
+  txns.forEach(t => {
+    const key = `${t.desc}|${t.amount}`;
+    if (!recurring[key]) recurring[key] = [];
+    recurring[key].push(t);
+  });
+  const result = [];
+  for (const [key, ts] of Object.entries(recurring)) {
+    if (ts.length >= 2) {
+      const dates = ts.map(t => new Date(t.date)).sort((a, b) => a - b);
+      const gaps = [];
+      for (let i = 1; i < dates.length; i++) gaps.push(Math.round((dates[i] - dates[i-1]) / (1000*60*60*24)));
+      const avgGap = Math.round(gaps.reduce((a, b) => a + b) / gaps.length);
+      let freq = 'Unknown';
+      if (avgGap >= 28 && avgGap <= 32) freq = 'Monthly';
+      else if (avgGap >= 6 && avgGap <= 8) freq = 'Weekly';
+      else if (avgGap >= 13 && avgGap <= 15) freq = 'Bi-weekly';
+      const [d, a] = key.split('|');
+      result.push({ desc: d, amount: parseFloat(a), freq, annual: parseFloat(a) * (365/avgGap) });
+    }
+  }
+  return result.sort((a, b) => b.annual - a.annual);
+}
+
+function renderCharts() {
+  const catSpending = {};
+  categories.forEach(c => catSpending[c] = 0);
+  txns.forEach(t => { if (catSpending.hasOwnProperty(t.category)) catSpending[t.category] += t.amount; });
+
+  if (chartInstances.cat) chartInstances.cat.destroy();
+  chartInstances.cat = new Chart(document.getElementById('categoryChart'), {
+    type: 'doughnut',
+    data: { labels: Object.keys(catSpending), datasets: [{ data: Object.values(catSpending), backgroundColor: ['#00d4ff', '#0099ff', '#4facfe', '#00f2fe', '#43e97b', '#f093fb'] }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#a0aec0' } } } }
+  });
+
+  const monthLabels = [], monthData = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    monthLabels.push(d.toLocaleString('en-US', { month: 'short' }));
+    const s = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+    const e = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+    monthData.push(txns.filter(t => t.date >= s && t.date <= e).reduce((sum, t) => sum + t.amount, 0));
+  }
+
+  if (chartInstances.trend) chartInstances.trend.destroy();
+  chartInstances.trend = new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: { labels: monthLabels, datasets: [{ label: 'Spending', data: monthData, borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.1)', tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: '#00d4ff' }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#a0aec0' } } }, scales: { y: { grid: { color: 'rgba(0,212,255,0.1)' }, ticks: { color: '#6b7280' } }, x: { ticks: { color: '#6b7280' } } } }
+  });
+}
+
+function render() {
+  const today = new Date().toISOString().split('T')[0];
+  const week = txns.filter(t => new Date(t.date) >= new Date(Date.now() - 7*24*60*60*1000)).reduce((s, t) => s + t.amount, 0);
+  const month = txns.filter(t => t.date.slice(0, 7) === today.slice(0, 7)).reduce((s, t) => s + t.amount, 0);
+  const inc = income.reduce((s, i) => s + i.amount, 0);
+  const balance = inc - txns.reduce((s, t) => s + t.amount, 0);
+
+  document.getElementById('weekSpent').textContent = '€' + week.toFixed(2);
+  document.getElementById('monthSpent').textContent = '€' + month.toFixed(2);
+  document.getElementById('totalIncome').textContent = '€' + inc.toFixed(2);
+  document.getElementById('netWorth').textContent = '€' + balance.toFixed(2);
+
+  document.getElementById('insWeek').textContent = '€' + week.toFixed(2);
+  document.getElementById('insMonth').textContent = '€' + month.toFixed(2);
+  document.getElementById('insIncome').textContent = '€' + inc.toFixed(2);
+  document.getElementById('insRemaining').textContent = '€' + balance.toFixed(2);
+
+  let sixMonthHTML = '';
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const month = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    const s = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+    const e = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+    const inc = income.filter(x => x.date >= s && x.date <= e).reduce((sum, x) => sum + x.amount, 0);
+    const spent = txns.filter(x => x.date >= s && x.date <= e).reduce((sum, x) => sum + x.amount, 0);
+    sixMonthHTML += `<tr><td>${month}</td><td>€${inc.toFixed(2)}</td><td>€${spent.toFixed(2)}</td><td>€${(inc-spent).toFixed(2)}</td></tr>`;
+  }
+  document.getElementById('sixMonthTable').innerHTML = sixMonthHTML;
+
+  const todayTxns = txns.filter(t => t.date === today);
+  document.getElementById('todayList').innerHTML = todayTxns.length ? todayTxns.map(t => `<div class="transaction-item"><div class="transaction-info"><div class="transaction-desc">${t.desc}</div><div class="transaction-meta">${t.category}</div></div><div><div class="transaction-amount">-€${t.amount.toFixed(2)}</div><button class="delete-btn" onclick="deleteTxn(${t.id})">×</button></div></div>`).join('') : '<div class="empty-state">No spending today</div>';
+
+  const recurring = detectRecurring();
+  document.getElementById('recurringTable').innerHTML = recurring.length ? recurring.map(r => `<tr><td>${r.desc}</td><td>€${r.amount.toFixed(2)}</td><td>${r.freq}</td><td>€${r.annual.toFixed(2)}</td></tr>`).join('') : '<tr><td colspan="4" style="text-align: center;">No subscriptions detected</td></tr>';
+
+  document.getElementById('weeklyBudgetInput').value = weeklyBudget;
+  document.getElementById('alertInput').value = alertThreshold;
+  document.getElementById('logDate').value = today;
+
+  filterTransactions();
+  renderCharts();
+}
+
+render();
+</script>
+</body>
+</html>
