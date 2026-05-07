@@ -219,14 +219,36 @@ function handleDrop(event) {
 }
 
 function loadSampleData() {
+  const today = new Date();
+  const d = (daysAgo) => {
+    const dt = new Date(today); dt.setDate(dt.getDate() - daysAgo);
+    return dt.toISOString().split('T')[0];
+  };
   txns = [
-    {id: 1, date: '2026-05-05', amount: 45, category: 'Food', desc: 'Supermarket'},
-    {id: 2, date: '2026-05-04', amount: 15, category: 'Transport', desc: 'Bus'},
-    {id: 3, date: '2026-05-03', amount: 120, category: 'Shopping', desc: 'Clothing'},
+    {id: 1, date: d(0), amount: 45.30, category: 'Food', desc: 'Tesco Supermarket'},
+    {id: 2, date: d(1), amount: 12.50, category: 'Transport', desc: 'Dublin Bus'},
+    {id: 3, date: d(2), amount: 89.99, category: 'Shopping', desc: 'Amazon'},
+    {id: 4, date: d(3), amount: 14.99, category: 'Entertainment', desc: 'Netflix'},
+    {id: 5, date: d(4), amount: 65.00, category: 'Utilities', desc: 'ESB Electricity'},
+    {id: 6, date: d(5), amount: 28.40, category: 'Food', desc: 'Lidl'},
+    {id: 7, date: d(7), amount: 35.00, category: 'Transport', desc: 'Petrol'},
+    {id: 8, date: d(10), amount: 120.00, category: 'Shopping', desc: 'Primark'},
+    {id: 9, date: d(14), amount: 9.99, category: 'Entertainment', desc: 'Spotify'},
+    {id: 10, date: d(20), amount: 55.20, category: 'Utilities', desc: 'Vodafone'},
+    {id: 11, date: d(25), amount: 32.00, category: 'Food', desc: 'Dunnes Stores'},
+    {id: 12, date: d(30), amount: 18.50, category: 'Food', desc: 'Coffee shop'},
+  ];
+  income = [
+    {id: 100, date: d(1), amount: 2500, source: 'Salary'},
   ];
   save();
+  // Switch to dashboard
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('dashboard').classList.add('active');
+  document.querySelector('nav button').classList.add('active');
   render();
-  alert('✅ Sample data loaded');
+  alert('✅ Loaded 12 sample transactions + €2,500 income');
 }
 
 function exportData() {
