@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CSV Import Test</title>
+  <style>
+    body { font-family: monospace; background: #0a0e27; color: #e5e7eb; padding: 20px; }
+    textarea { width: 100%; height: 200px; background: #1a1f3a; color: #e5e7eb; border: 1px solid #00d4ff; padding: 10px; }
+    button { background: #00d4ff; color: #000; padding: 10px 20px; margin-top: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+    #output { background: #1a1f3a; border: 1px solid #00d4ff; padding: 15px; margin-top: 20px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<h1>🧪 CSV Import Tester (FIXED)</h1>
+
+<p>Upload your actual CSV file:</p>
+<input type="file" id="csvFile" accept=".csv">
+
+<button onclick="testFile()">Test Upload</button>
+
+<div id="output">Results will appear here...</div>
+
+<script>
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let insideQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') insideQuotes = !insideQuotes;
+    else if (char === ',' && !insideQuotes) { result.push(current.trim()); current = ''; }
+    else current += char;
+  }
+  result.push(current.trim());
+  return result.map(c => c.replace(/^"|"$/g, ''));
+}
+
+function testFile() {
+  const file = document.getElementById('csvFile').files[0];
+  if (!file) {
+    document.getElementById('output').textContent = '❌ Please select a file';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let output = `📂 File: ${file.name}\n`;
+    output += `📊 Size: ${file.size} bytes\n\n`;
+
+    try {
+      const text = e.target.result;
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+      output += `📈 Total lines: ${lines.length}\n\n`;
+
+      if (lines.length < 2) {
+        output += '❌ File is empty!';
+        document.getElementById('output').textContent = output;
+        return;
+      }
+
+      // Parse header
+      const headerCols = parseCSVLine(lines[0]);
+      output += `📋 HEADERS (${headerCols.length} columns):\n`;
+      headerCols.forEach((h, i) => {
+        output += `  ${i+1}. ${h}\n`;
+      });
+
+      // Find columns with PRECISE detection (FIXED VERSION)
+      output += `\n🔍 COLUMN DETECTION (IMPROVED):\n`;
+      const headerLower = headerCols.map(h => h.toLowerCase());
+      let dateIdx = -1, debitIdx = -1, creditIdx = -1, descIdx = -1;
+
+      // Date: prefer "posted transactions date" or similar
+      for (let i = 0; i < headerLower.length; i++) {
+        const h = headerLower[i];
+        if ((h.includes('posted') && h.includes('date')) || h.includes('transaction date') || h.includes('posting date')) {
+          dateIdx = i;
+          output += `  ✓ Found DATE at column ${i+1}: "${headerCols[i]}"\n`;
+          break;
+        }
+      }
+      // Fallback: just "date" without "currency"
+      if (dateIdx === -1) {
+        for (let i = 0; i < headerLower.length; i++) {
+          const h = headerLower[i];
+          if (h.includes('date') && !h.includes('currency')) {
+            dateIdx = i;
+            output += `  ✓ Found DATE (fallback) at column ${i+1}: "${headerCols[i]}"\n`;
+            break;
+          }
+        }
+      }
+
+      // Debit & Credit
+      for (let i = 0; i < headerLower.length; i++) {
+        const h = headerLower[i];
+        if (h.includes('debit')) {
+          debitIdx = i;
+          output += `  ✓ Found DEBIT at column ${i+1}: "${headerCols[i]}"\n`;
+        }
+        if (h.includes('credit')) {
+          creditIdx = i;
+          output += `  ✓ Found CREDIT at column ${i+1}: "${headerCols[i]}"\n`;
+        }
+      }
+
+      // Description: prefer description1, avoid description2/3
+      for (let i = 0; i < headerLower.length; i++) {
+        const h = headerLower[i];
+        if (h.includes('description') && !h.includes('description2') && !h.includes('description3')) {
+          descIdx = i;
+          output += `  ✓ Found DESCRIPTION at column ${i+1}: "${headerCols[i]}"\n`;
+          break;
+        }
+      }
+      // Fallback: any description
+      if (descIdx === -1) {
+        for (let i = 0; i < headerLower.length; i++) {
+          if (headerLower[i].includes('description')) {
+            descIdx = i;
+            output += `  ✓ Found DESCRIPTION (fallback) at column ${i+1}: "${headerCols[i]}"\n`;
+            break;
+          }
+        }
+      }
+
+      // Defaults
+      if (dateIdx === -1) { dateIdx = 1; output += `  ! Using default DATE: column 2\n`; }
+      if (descIdx === -1) { descIdx = 2; output += `  ! Using default DESC: column 3\n`; }
+      if (debitIdx === -1 && creditIdx === -1) { debitIdx = 5; output += `  ! Using default DEBIT: column 6\n`; }
+
+      // Parse first 5 rows
+      output += `\n📋 PARSING FIRST 5 ROWS:\n`;
+      let imported = 0;
+      for (let i = 1; i < Math.min(6, lines.length); i++) {
+        const cols = parseCSVLine(lines[i]);
+        const dateStr = cols[dateIdx] || '';
+        const desc = cols[descIdx] || '';
+        const debitAmount = cols[debitIdx] || '';
+        const creditAmount = cols[creditIdx] || '';
+
+        output += `\n  Row ${i}:\n`;
+        output += `    Date: "${dateStr}"\n`;
+        output += `    Desc: "${desc}"\n`;
+        output += `    Debit: "${debitAmount}"\n`;
+        output += `    Credit: "${creditAmount}"\n`;
+
+        // Parse date
+        let date = null;
+        if (/^\d{2}\/\d{2}\/\d{4}/.test(dateStr)) {
+          const parts = dateStr.split('/');
+          date = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        } else if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+          date = dateStr;
+        }
+
+        // Parse amount
+        let amountStr = debitAmount || creditAmount;
+        const cleanAmount = amountStr.replace(/[€$£¥,\s]/g, '');
+        const amount = Math.abs(parseFloat(cleanAmount));
+
+        const ok = date && amount > 0 && desc;
+        output += `    Status: ${ok ? '✅ IMPORT' : '❌ SKIP'}\n`;
+        if (ok) imported++;
+      }
+
+      output += `\n\n✅ WOULD IMPORT: ${imported} rows out of first 5\n`;
+      output += `📊 TOTAL EXPECTED: ~${Math.round((lines.length - 1) * (imported / 5))} rows from whole file`;
+    } catch (err) {
+      output += `\n❌ ERROR: ${err.message}`;
+    }
+
+    document.getElementById('output').textContent = output;
+  };
+  reader.readAsText(file);
+}
+</script>
+
+</body>
+</html>
