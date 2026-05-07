@@ -360,51 +360,116 @@ const csvAutoCategories = {
   'Personal & Discretionary': /amazon|shop|store|clothing|primark|zara|h&m|penneys/i,
 };
 
+// Quote-aware CSV line parser (handles commas inside quoted fields)
+function parseCSVLine(line) {
+  const cols = [];
+  let curr = '', inQuotes = false;
+  for (let c of line) {
+    if (c === '"') inQuotes = !inQuotes;
+    else if (c === ',' && !inQuotes) { cols.push(curr.trim()); curr = ''; }
+    else curr += c;
+  }
+  cols.push(curr.trim());
+  return cols;
+}
+
+// Try to parse a date string in any common format
+function parseAnyDate(s) {
+  if (!s) return null;
+  s = s.replace(/"/g, '').trim();
+  // YYYY-MM-DD or YYYY/MM/DD
+  let m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  // DD/MM/YYYY or DD-MM-YYYY
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  // DD Mon YYYY (e.g. "5 May 2026")
+  m = s.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})/);
+  if (m) {
+    const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+    const mn = months[m[2].toLowerCase().slice(0,3)];
+    if (mn) return `${m[3]}-${String(mn).padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  }
+  return null;
+}
+
+function cleanAmount(s) {
+  if (!s) return '';
+  return s.replace(/"/g, '').replace(/[€$£¥,\s]/g, '').trim();
+}
+
+function detectColumns(header) {
+  const h = header.map(x => x.toLowerCase());
+  const find = (patterns) => h.findIndex(x => patterns.some(p => x.includes(p)));
+  return {
+    date:   find(['posted transaction', 'completed date', 'transaction date', 'started date', 'posted date', 'value date', 'date']),
+    desc:   find(['description1', 'description', 'details', 'narrative', 'merchant', 'reference', 'name', 'payee']),
+    debit:  find(['debit', 'withdrawal', 'money out', 'paid out']),
+    credit: find(['credit', 'deposit', 'money in', 'paid in']),
+    amount: find(['amount', 'transaction amount', 'value']),
+  };
+}
+
 function importCSV(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const lines = e.target.result.split('\n').filter(l => l.trim());
+      const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
       if (lines.length < 2) return alert('❌ Empty CSV');
 
-      let imported = 0;
+      const header = parseCSVLine(lines[0]);
+      const cols = detectColumns(header);
+
+      // Validate: need date + desc + (debit OR credit OR amount)
+      if (cols.date === -1 || cols.desc === -1 || (cols.debit === -1 && cols.credit === -1 && cols.amount === -1)) {
+        return alert('❌ Could not detect bank format.\n\nNeed columns for: Date, Description, and (Debit/Credit OR Amount).\n\nDetected headers:\n' + header.join(' | '));
+      }
+
+      let imported = 0, skipped = 0;
       for (let i = 1; i < lines.length; i++) {
-        const parts = lines[i].split(',');
-        if (parts.length < 7) continue;
+        const parts = parseCSVLine(lines[i]);
+        if (parts.length < 2) { skipped++; continue; }
 
-        const date = parts[1].replace(/"/g, '').trim();
-        const desc = parts[2].replace(/"/g, '').trim();
-        const debit = parts[5].replace(/"/g, '').replace(/[€$£¥,\s]/g, '').trim();
-        const credit = parts[6].replace(/"/g, '').replace(/[€$£¥,\s]/g, '').trim();
+        const date = parseAnyDate(parts[cols.date] || '');
+        const desc = (parts[cols.desc] || '').replace(/"/g, '').trim();
+        if (!date || !desc) { skipped++; continue; }
 
-        if (!date || !desc) continue;
-        if (!/^\d{2}\/\d{2}\/\d{4}$/.test(date)) continue;
-
-        const dp = date.split('/');
-        const convertedDate = `${dp[2]}-${dp[1]}-${dp[0]}`;
-
-        const amount = debit ? parseFloat(debit) : parseFloat(credit);
-        if (!amount) continue;
+        let amountVal = 0, isIncome = false;
+        if (cols.debit !== -1 || cols.credit !== -1) {
+          // Two-column format (AIB, BOI, PTSB)
+          const debit  = parseFloat(cleanAmount(parts[cols.debit]  || '')) || 0;
+          const credit = parseFloat(cleanAmount(parts[cols.credit] || '')) || 0;
+          if (debit > 0)       { amountVal = debit;  isIncome = false; }
+          else if (credit > 0) { amountVal = credit; isIncome = true;  }
+        } else {
+          // Single amount column (Revolut, Wise) — negative = spending
+          const raw = parseFloat(cleanAmount(parts[cols.amount] || '')) || 0;
+          if (raw === 0) { skipped++; continue; }
+          amountVal = Math.abs(raw);
+          isIncome = raw > 0;
+        }
+        if (!amountVal) { skipped++; continue; }
 
         let cat = 'Personal & Discretionary';
         for (const [c, regex] of Object.entries(csvAutoCategories)) {
           if (regex.test(desc)) { cat = c; break; }
         }
 
-        if (debit) {
-          txns.push({ id: Date.now() + Math.random(), date: convertedDate, amount: Math.abs(amount), category: cat, desc, account: 'AIB Personal' });
+        const id = Date.now() + Math.random();
+        if (isIncome) {
+          income.push({ id, date, amount: amountVal, desc, account: 'AIB Personal' });
         } else {
-          income.push({ id: Date.now() + Math.random(), date: convertedDate, amount: Math.abs(amount), desc, account: 'AIB Personal' });
+          txns.push({ id, date, amount: amountVal, category: cat, desc, account: 'AIB Personal' });
         }
         imported++;
       }
 
-      if (imported === 0) return alert('❌ Could not import any transactions.');
+      if (imported === 0) return alert(`❌ Could not import any transactions.\n\nSkipped: ${skipped} rows.\n\nDetected columns:\n  Date: ${header[cols.date] || 'NOT FOUND'}\n  Desc: ${header[cols.desc] || 'NOT FOUND'}\n  Debit: ${header[cols.debit] || 'n/a'}\n  Credit: ${header[cols.credit] || 'n/a'}\n  Amount: ${header[cols.amount] || 'n/a'}`);
       save();
       render();
-      alert(`✅ Imported ${imported} transactions!`);
+      alert(`✅ Imported ${imported} transactions!\n${skipped > 0 ? `(${skipped} rows skipped)` : ''}`);
     } catch (err) {
       alert('❌ Error: ' + err.message);
     }
