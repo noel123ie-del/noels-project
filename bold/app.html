@@ -2058,13 +2058,76 @@ function answerQuestion(q) {
 
   if (onMatch) {
     const term = onMatch[1].replace(/[?!.]/g, '').trim();
-    const matched = filtered.filter(t =>
+    // Synonym expansion — common topics map to multiple keywords + categories
+    const synonyms = {
+      'coffee':       { keys: ['coffee','cafe','latte','cappuccino','espresso','mocha','tea','starbucks','costa','insomnia','butlers','nero','pret','greggs'], cat: 'Eating Out & Coffee' },
+      'food':         { keys: ['food','restaurant','dining','meal','takeaway','deliveroo','just eat','uber eats','mcdonald','burger','pizza'], cat: 'Eating Out & Coffee' },
+      'eating out':   { keys: ['restaurant','cafe','takeaway','deliveroo','just eat','dining'], cat: 'Eating Out & Coffee' },
+      'restaurants':  { keys: ['restaurant','dining','bistro'], cat: 'Eating Out & Coffee' },
+      'groceries':    { keys: ['tesco','dunnes','lidl','aldi','spar','centra','supervalu','grocer','supermarket'], cat: 'Groceries' },
+      'shopping':     { keys: ['amazon','zara','primark','penneys','h&m','shop','store','clothing'], cat: 'Personal & Discretionary' },
+      'fuel':         { keys: ['petrol','fuel','circle k','applegreen','maxol','topaz','shell','esso','bp','texaco'], cat: 'Fuel & Transport' },
+      'petrol':       { keys: ['petrol','fuel','circle k','applegreen','maxol','topaz','shell','esso'], cat: 'Fuel & Transport' },
+      'transport':    { keys: ['taxi','uber','bolt','bus','train','luas','dart','ryanair','aer lingus','free now'], cat: 'Fuel & Transport' },
+      'taxis':        { keys: ['taxi','uber','bolt','free now','lyft'], cat: 'Fuel & Transport' },
+      'taxi':         { keys: ['taxi','uber','bolt','free now','lyft'], cat: 'Fuel & Transport' },
+      'subscriptions':{ keys: ['netflix','spotify','disney','prime','apple','google','adobe','dropbox','icloud'], cat: 'Subscriptions' },
+      'streaming':    { keys: ['netflix','disney','prime video','hulu','hbo','paramount'], cat: 'Subscriptions' },
+      'utilities':    { keys: ['electricity','water','gas','broadband','phone','esb','vodafone','eir','sky','virgin','three','bord gais'], cat: 'Utilities & Bills' },
+      'bills':        { keys: ['bill','electricity','gas','water','broadband','phone'], cat: 'Utilities & Bills' },
+      'health':       { keys: ['gym','pharmacy','doctor','medical','boots','flyefit','fitness'], cat: 'Health & Fitness' },
+      'gym':          { keys: ['gym','flyefit','fitness','westwood','peloton','crossfit','yoga','pilates'], cat: 'Health & Fitness' },
+      'kids':         { keys: ['school','creche','toy','child','smyths','mothercare'], cat: 'Kids & Family' },
+      'family':       { keys: ['school','creche','child','family'], cat: 'Kids & Family' },
+    };
+
+    // Direct match first
+    let matched = filtered.filter(t =>
       (t.desc || '').toLowerCase().includes(term) ||
       (t.category || '').toLowerCase().includes(term)
     );
-    if (!matched.length) return `No transactions matching "${term}" ${periodLabel}.`;
+
+    // If no direct match, try synonym expansion
+    let usedSyn = null;
+    if (!matched.length) {
+      const syn = synonyms[term] || synonyms[term.replace(/s$/, '')] || synonyms[term + 's'];
+      if (syn) {
+        matched = filtered.filter(t => {
+          const desc = (t.desc || '').toLowerCase();
+          const cat = (t.category || '').toLowerCase();
+          if (cat.includes(syn.cat.toLowerCase()) || cat === syn.cat.toLowerCase()) return true;
+          return syn.keys.some(k => desc.includes(k));
+        });
+        if (matched.length) usedSyn = syn;
+      }
+    }
+
+    // If still nothing, try category-name match
+    if (!matched.length) {
+      const matchCat = categories.find(c => c.toLowerCase().includes(term) || term.includes(c.toLowerCase().split(' ')[0]));
+      if (matchCat) {
+        matched = filtered.filter(t => t.category === matchCat);
+        if (matched.length) usedSyn = { cat: matchCat };
+      }
+    }
+
+    if (!matched.length) {
+      // Helpful fallback
+      const allCats = [...new Set(txns.map(t => t.category))];
+      const allMerchants = [...new Set(txns.map(t => (t.desc || '').slice(0, 30)))].filter(d => d).slice(0, 5);
+      return `No transactions matching "${term}" ${periodLabel}. Your data has these categories: ${allCats.join(', ')}.${allMerchants.length ? `<br>Top merchants: ${allMerchants.join(', ')}.` : ''}<br>Try asking about a category by name, e.g. <em>"How much on Eating Out & Coffee?"</em>`;
+    }
+
     const total = matched.reduce((s, t) => s + t.amount, 0);
-    return `You spent <strong>${currencySymbol()}${total.toFixed(2)}</strong> on ${term} ${periodLabel} across ${matched.length} transaction${matched.length > 1 ? 's' : ''}.`;
+    let topMerchants = '';
+    if (matched.length > 1) {
+      const merchSums = {};
+      matched.forEach(t => { const k = t.desc || 'Unknown'; merchSums[k] = (merchSums[k] || 0) + t.amount; });
+      const top3 = Object.entries(merchSums).sort((a, b) => b[1] - a[1]).slice(0, 3);
+      topMerchants = `<br>Top: ${top3.map(m => `${m[0]} ${currencySymbol()}${m[1].toFixed(2)}`).join(', ')}`;
+    }
+    const synNote = usedSyn ? ` (matched ${usedSyn.cat || 'similar'} category)` : '';
+    return `You spent <strong>${currencySymbol()}${total.toFixed(2)}</strong> on ${term}${synNote} ${periodLabel} across ${matched.length} transaction${matched.length > 1 ? 's' : ''}.${topMerchants}`;
   }
 
   // Biggest category
