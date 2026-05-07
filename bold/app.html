@@ -556,14 +556,15 @@ function filterTransactions() {
   document.getElementById('filteredTransactionsList').innerHTML = html;
 }
 
+let _chartInstances = {};
 function renderCharts() {
   const categorySpending = {};
   categories.forEach(cat => categorySpending[cat] = sumByCategory(cat));
 
   const canvas = document.getElementById('categoryChart');
-  if (canvas && window.categoryChart) window.categoryChart.destroy();
+  if (canvas && _chartInstances.category) _chartInstances.category.destroy();
   if (canvas) {
-    window.categoryChart = new Chart(canvas, {
+    _chartInstances.category = new Chart(canvas, {
       type: 'doughnut',
       data: {
         labels: categories,
@@ -580,7 +581,7 @@ function renderCharts() {
 
   // 5-week trend
   const trendCanvas = document.getElementById('trendChart');
-  if (trendCanvas && window.trendChart) window.trendChart.destroy();
+  if (trendCanvas && _chartInstances.trend) _chartInstances.trend.destroy();
   if (trendCanvas) {
     const labels = [];
     const data = [];
@@ -596,7 +597,7 @@ function renderCharts() {
       labels.push('Week ' + (5 - i));
       data.push(sumByDateRange(txns, 'amount', sStart, sEnd));
     }
-    window.trendChart = new Chart(trendCanvas, {
+    _chartInstances.trend = new Chart(trendCanvas, {
       type: 'line',
       data: {
         labels,
