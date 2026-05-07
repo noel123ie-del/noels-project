@@ -102,6 +102,35 @@
     .chart-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
     .chart-wrapper { position: relative; height: 300px; }
 
+    /* ======= v1.9 Niche additions ======= */
+    @media print {
+      header, .emoji-nav, .fab, .theme-toggle, .toggle-group, .numpad-grid, .numpad-display, .cat-picker, details, .form-card button, .delete-btn, button { display: none !important; }
+      body { background: white !important; color: black !important; }
+      .form-card { break-inside: avoid; box-shadow: none !important; border: 1px solid #ccc !important; }
+      .section { display: block !important; }
+      .hero-card { background: #f0f0f0 !important; color: black !important; box-shadow: none !important; }
+    }
+    .acct-card { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 20px; border-radius: 16px; min-width: 240px; box-shadow: 0 8px 20px rgba(59,130,246,0.3); position: relative; overflow: hidden; }
+    .acct-card.aib { background: linear-gradient(135deg, #006a4e 0%, #00a86b 100%); }
+    .acct-card.aib-business { background: linear-gradient(135deg, #1f3a5f 0%, #4a7baa 100%); }
+    .acct-card.revolut { background: linear-gradient(135deg, #000 0%, #2a2a2a 100%); }
+    .acct-card.credit-union { background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%); }
+    .acct-card.cash { background: linear-gradient(135deg, #27ae60 0%, #43e97b 100%); }
+    .acct-card .acct-name { font-size: 0.85rem; opacity: 0.85; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .acct-card .acct-balance { font-size: 1.8rem; font-weight: 800; }
+    .acct-card .acct-meta { font-size: 0.75rem; opacity: 0.8; margin-top: 4px; }
+    .acct-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+
+    .tax-badge { display: inline-block; background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; margin-left: 8px; }
+    [data-theme="dark"] .tax-badge { background: #92400e; color: #fef3c7; }
+
+    .voice-btn { background: linear-gradient(135deg, #ff5e5e, #c0392b); color: white; border: none; padding: 14px 24px; border-radius: 12px; font-weight: 800; cursor: pointer; font-size: 1rem; width: 100%; }
+    .voice-btn.listening { animation: pulse 1.2s infinite; }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,94,94,0.6); }
+      50% { transform: scale(1.02); box-shadow: 0 0 0 12px rgba(255,94,94,0); }
+    }
+
     /* ======= v1.7 UX Polish additions ======= */
 
     /* Floating Action Button */
@@ -574,6 +603,62 @@
     </div>
 
     <div class="form-card">
+      <h3>💳 Your Accounts</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Total balance estimated from transactions per account</p>
+      <div class="acct-grid" id="accountCards"></div>
+    </div>
+
+    <div class="form-card">
+      <h3>💱 Currency</h3>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Base currency</label>
+          <select id="baseCurrency" onchange="setBaseCurrency()">
+            <option value="EUR">€ Euro (EUR)</option>
+            <option value="GBP">£ British Pound (GBP)</option>
+            <option value="USD">$ US Dollar (USD)</option>
+          </select>
+        </div>
+      </div>
+      <p style="color: var(--text-muted); font-size: 0.85rem;">Currency symbol used throughout the app. Foreign-currency transactions will be flagged.</p>
+    </div>
+
+    <div class="form-card">
+      <h3>🎤 Voice Quick-Add</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Try saying "Spent fifteen euro on coffee" — works in Chrome/Edge</p>
+      <button class="voice-btn" id="voiceBtn" onclick="toggleVoiceInput()">🎤 Start Listening</button>
+      <div id="voiceTranscript" style="margin-top: 10px; color: var(--text-muted); font-size: 0.9rem;"></div>
+    </div>
+
+    <div class="form-card">
+      <h3>📋 Save Rules</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">"Save €X every time Y" — automated savings triggers</p>
+      <div id="saveRulesList"></div>
+      <details style="margin-top: 12px;">
+        <summary style="cursor: pointer; font-weight: 700; color: var(--accent);">+ Add a save rule</summary>
+        <div class="form-grid" style="margin-top: 12px;">
+          <div class="form-group"><label>Rule name</label><input type="text" id="ruleName" placeholder="e.g. Skip Starbucks"></div>
+          <div class="form-group"><label>Save €</label><input type="number" id="ruleAmount" step="0.01" placeholder="5"></div>
+          <div class="form-group"><label>Trigger keyword (optional)</label><input type="text" id="ruleKeyword" placeholder="e.g. starbucks (auto-trigger)"></div>
+        </div>
+        <button class="btn btn-primary" onclick="addSaveRule()" style="width: 100%; margin-top: 8px;">Add Rule</button>
+      </details>
+    </div>
+
+    <div class="form-card">
+      <h3>🌱 Carbon Footprint</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Estimated CO2 emissions from your spending (rough)</p>
+      <div id="co2Display"></div>
+    </div>
+
+    <div class="form-card">
+      <h3>📄 Export & Print</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Statement-style print/PDF</p>
+      <button class="btn btn-primary" onclick="printStatement()" style="width: 100%; margin-bottom: 8px;">🖨️ Print / Save as PDF</button>
+      <button class="btn btn-primary" onclick="exportTaxCSV()" style="width: 100%; background: var(--success);">💼 Export Tax-Tagged Transactions</button>
+    </div>
+
+    <div class="form-card">
       <h3>📆 Payday Cycle</h3>
       <p style="color: #8fa3b8; margin-bottom: 12px; font-size: 0.9rem;">Day of month you get paid (1-31). Used for payday-to-payday spending view.</p>
       <div class="form-grid">
@@ -612,6 +697,12 @@ let paydayDay = parseInt(localStorage.getItem('paydayDay') || '0') || null;
 let userCategoryRules = JSON.parse(localStorage.getItem('userCategoryRules') || '{}');
 let alertedThisSession = {};
 
+// v1.9 data
+let saveRules = JSON.parse(localStorage.getItem('saveRules') || '[]');
+let baseCurrency = localStorage.getItem('baseCurrency') || 'EUR';
+let voiceRecognition = null;
+let voiceListening = false;
+
 const categories = ['Groceries', 'Fuel & Transport', 'Utilities & Bills', 'Subscriptions', 'Eating Out & Coffee', 'Kids & Family', 'Health & Fitness', 'Personal & Discretionary'];
 const accounts = ['AIB Personal', 'AIB Business', 'Revolut', 'Credit Union', 'Cash'];
 
@@ -626,6 +717,8 @@ function save() {
   localStorage.setItem('pots', JSON.stringify(pots));
   if (paydayDay) localStorage.setItem('paydayDay', String(paydayDay));
   localStorage.setItem('userCategoryRules', JSON.stringify(userCategoryRules));
+  localStorage.setItem('saveRules', JSON.stringify(saveRules));
+  localStorage.setItem('baseCurrency', baseCurrency);
 }
 
 function switchSection(event, sectionId) {
@@ -713,6 +806,14 @@ function editTxn(id) {
       learnCategoryRule(txn.desc, newCat);
       showToast(`✅ Will categorise "${txn.desc}" as ${newCat} from now on`);
     }
+  }
+
+  // Step 3: optional tax flag toggle
+  const taxNow = txn.tax ? 'YES' : 'NO';
+  const taxChoice = prompt(`Mark as tax-deductible (business expense)?\n\nCurrently: ${taxNow}\n\nType Y to toggle, leave blank to keep:`);
+  if (taxChoice && /^y/i.test(taxChoice.trim())) {
+    txn.tax = !txn.tax;
+    showToast(txn.tax ? '💼 Marked tax-deductible' : '✅ Tax flag removed');
   }
   save();
   render();
@@ -1479,6 +1580,287 @@ function celebrate() {
     else canvas.remove();
   }
   tick();
+}
+
+// ====== v1.9 Account cards ======
+function renderAccountCards() {
+  const grid = document.getElementById('accountCards');
+  if (!grid) return;
+  // Calculate balance per account = income - spending
+  const balances = {};
+  accounts.forEach(a => balances[a] = 0);
+  income.forEach(i => { if (i.account) balances[i.account] = (balances[i.account] || 0) + i.amount; });
+  txns.forEach(t => { if (t.account) balances[t.account] = (balances[t.account] || 0) - t.amount; });
+
+  const accountStyles = {
+    'AIB Personal': 'aib',
+    'AIB Business': 'aib-business',
+    'Revolut': 'revolut',
+    'Credit Union': 'credit-union',
+    'Cash': 'cash',
+  };
+  const accountIcons = {
+    'AIB Personal': '🏦',
+    'AIB Business': '🏢',
+    'Revolut': '💳',
+    'Credit Union': '🤝',
+    'Cash': '💵',
+  };
+
+  grid.innerHTML = accounts.map(a => {
+    const cls = accountStyles[a] || '';
+    const icon = accountIcons[a] || '💳';
+    const bal = balances[a] || 0;
+    const txCount = txns.filter(t => t.account === a).length + income.filter(i => i.account === a).length;
+    return `
+      <div class="acct-card ${cls}" onclick="filterByAccount('${a}')" style="cursor: pointer;">
+        <div class="acct-name">${icon} ${a}</div>
+        <div class="acct-balance">${bal < 0 ? '-' : ''}${currencySymbol()}${Math.abs(bal).toLocaleString('en-IE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+        <div class="acct-meta">${txCount} transactions</div>
+      </div>`;
+  }).join('');
+}
+
+function filterByAccount(acc) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.emoji-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('transactions').classList.add('active');
+  const navBtns = document.querySelectorAll('.emoji-nav button');
+  // Find Stats button (5th)
+  if (navBtns[4]) navBtns[4].classList.add('active');
+  populateTxFilterDropdowns();
+  document.getElementById('txAcc').value = acc;
+  renderAllTransactions();
+  window.scrollTo(0, 0);
+}
+
+// ====== v1.9 Currency ======
+const currencySymbols = { EUR: '€', GBP: '£', USD: '$' };
+function currencySymbol() { return currencySymbols[baseCurrency] || '€'; }
+function setBaseCurrency() {
+  const sel = document.getElementById('baseCurrency');
+  if (!sel) return;
+  baseCurrency = sel.value;
+  save();
+  showToast(`Currency set to ${baseCurrency}`);
+  render();
+}
+
+// ====== v1.9 Voice quick-add ======
+function toggleVoiceInput() {
+  const btn = document.getElementById('voiceBtn');
+  const out = document.getElementById('voiceTranscript');
+  if (!btn) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    out.textContent = '⚠️ Voice recognition not supported in this browser. Try Chrome or Edge.';
+    return;
+  }
+  if (voiceListening) {
+    if (voiceRecognition) voiceRecognition.stop();
+    voiceListening = false;
+    btn.classList.remove('listening');
+    btn.textContent = '🎤 Start Listening';
+    return;
+  }
+  voiceRecognition = new SR();
+  voiceRecognition.lang = 'en-GB';
+  voiceRecognition.continuous = false;
+  voiceRecognition.interimResults = false;
+  voiceRecognition.onresult = (e) => {
+    const transcript = e.results[0][0].transcript;
+    out.textContent = '🎙️ Heard: "' + transcript + '"';
+    parseVoiceCommand(transcript);
+  };
+  voiceRecognition.onerror = (e) => { out.textContent = '❌ ' + e.error; };
+  voiceRecognition.onend = () => {
+    voiceListening = false;
+    btn.classList.remove('listening');
+    btn.textContent = '🎤 Start Listening';
+  };
+  voiceRecognition.start();
+  voiceListening = true;
+  btn.classList.add('listening');
+  btn.textContent = '🔴 Listening... (tap to stop)';
+}
+
+function parseVoiceCommand(text) {
+  // Match patterns like: "spent 15 on coffee", "spent fifteen euro on coffee", "paid 20 for groceries"
+  const lower = text.toLowerCase();
+  // Word-to-number basic mapping
+  const wordNums = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10,
+    eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18,
+    nineteen:19, twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90,
+    hundred:100, thousand:1000 };
+  // Try numeric match first
+  let amount = null;
+  const numMatch = lower.match(/(\d+(?:\.\d+)?)/);
+  if (numMatch) amount = parseFloat(numMatch[1]);
+  else {
+    // Try word numbers
+    for (const w of lower.split(/\s+/)) {
+      if (wordNums[w]) { amount = wordNums[w]; break; }
+    }
+  }
+  if (!amount) { showToast('❌ Could not understand amount'); return; }
+
+  // Description = words after "on" or "for"
+  const onMatch = lower.match(/(?:on|for)\s+(.+)/);
+  const desc = onMatch ? onMatch[1].trim() : 'Voice entry';
+
+  // Categorise
+  let cat = 'Personal & Discretionary';
+  for (const [c, regex] of Object.entries(csvAutoCategories)) {
+    if (regex.test(desc)) { cat = c; break; }
+  }
+
+  // Add transaction
+  txns.push({
+    id: Date.now() + Math.random(),
+    date: new Date().toISOString().split('T')[0],
+    amount,
+    category: cat,
+    desc: desc.charAt(0).toUpperCase() + desc.slice(1),
+    account: 'AIB Personal',
+  });
+  save();
+  render();
+  showToast(`✅ Added: €${amount.toFixed(2)} — ${desc} (${cat})`);
+}
+
+// ====== v1.9 Save rules ======
+function addSaveRule() {
+  const name = document.getElementById('ruleName').value.trim();
+  const amount = parseFloat(document.getElementById('ruleAmount').value);
+  const keyword = document.getElementById('ruleKeyword').value.trim().toLowerCase();
+  if (!name || !amount) return alert('Enter rule name and amount');
+  saveRules.push({ id: Date.now(), name, amount, keyword, triggered: 0 });
+  save();
+  document.getElementById('ruleName').value = '';
+  document.getElementById('ruleAmount').value = '';
+  document.getElementById('ruleKeyword').value = '';
+  renderSaveRules();
+  showToast(`✅ Save rule "${name}" added`);
+}
+function deleteSaveRule(id) {
+  if (!confirm('Delete this rule?')) return;
+  saveRules = saveRules.filter(r => r.id !== id);
+  save();
+  renderSaveRules();
+}
+function triggerSaveRule(id) {
+  const r = saveRules.find(x => x.id === id);
+  if (!r) return;
+  r.triggered = (r.triggered || 0) + 1;
+  // Add to first pot or create one
+  if (!pots.length) pots.push({ id: Date.now(), name: 'Auto-savings', balance: 0 });
+  pots[0].balance += r.amount;
+  save();
+  renderSaveRules();
+  renderPots();
+  showToast(`💰 Saved €${r.amount.toFixed(2)} to "${pots[0].name}"`);
+}
+function renderSaveRules() {
+  const list = document.getElementById('saveRulesList');
+  if (!list) return;
+  if (!saveRules.length) {
+    list.innerHTML = '<div class="empty-state"><div class="illust">📋</div><div class="title">No save rules yet</div><div class="hint">e.g. "Skip Starbucks → save €5 each time"</div></div>';
+    return;
+  }
+  list.innerHTML = saveRules.map(r => `
+    <div style="background: var(--bg-soft); padding: 14px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+      <div style="flex: 1;">
+        <div style="font-weight: 700;">📋 ${r.name}</div>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">Save €${r.amount.toFixed(2)}${r.keyword ? ` (auto on "${r.keyword}")` : ''} • triggered ${r.triggered || 0}×</div>
+      </div>
+      <button class="btn btn-primary" onclick="triggerSaveRule(${r.id})" style="padding: 6px 12px; font-size: 0.85rem;">Save €${r.amount.toFixed(2)}</button>
+      <button class="delete-btn" onclick="deleteSaveRule(${r.id})">×</button>
+    </div>`).join('');
+}
+
+// ====== v1.9 CO2 tracking ======
+const co2PerEur = {
+  'Groceries': 0.4,           // kg CO2 per €1
+  'Fuel & Transport': 1.2,
+  'Utilities & Bills': 0.6,
+  'Subscriptions': 0.05,
+  'Eating Out & Coffee': 0.3,
+  'Kids & Family': 0.2,
+  'Health & Fitness': 0.1,
+  'Personal & Discretionary': 0.5,
+};
+function renderCO2() {
+  const el = document.getElementById('co2Display');
+  if (!el) return;
+  if (!txns.length) {
+    el.innerHTML = '<div class="empty-state"><div class="illust">🌱</div><div class="title">No data yet</div><div class="hint">Add transactions to estimate your carbon footprint.</div></div>';
+    return;
+  }
+  // This month
+  const monthStart = new Date().toISOString().slice(0, 7) + '-01';
+  const monthTxns = txns.filter(t => t.date >= monthStart);
+  let totalKg = 0;
+  const byCat = {};
+  monthTxns.forEach(t => {
+    const factor = co2PerEur[t.category] || 0.3;
+    const kg = t.amount * factor;
+    totalKg += kg;
+    byCat[t.category] = (byCat[t.category] || 0) + kg;
+  });
+  const sorted = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+  // Average European: ~700kg/month CO2
+  const avgEu = 700;
+  const pct = (totalKg / avgEu) * 100;
+  const treesNeeded = Math.ceil(totalKg / 21); // ~21kg CO2 per tree per year
+
+  el.innerHTML = `
+    <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; padding: 16px; border-radius: 12px; margin-bottom: 12px; text-align: center;">
+      <div style="font-size: 0.85rem; opacity: 0.9;">Estimated CO2 this month</div>
+      <div style="font-size: 2.2rem; font-weight: 900;">${totalKg.toFixed(1)} kg</div>
+      <div style="font-size: 0.85rem; opacity: 0.9;">${pct < 100 ? `${(100 - pct).toFixed(0)}% below` : `${(pct - 100).toFixed(0)}% above`} EU average</div>
+      <div style="font-size: 0.85rem; opacity: 0.9; margin-top: 4px;">🌳 ${treesNeeded} tree${treesNeeded !== 1 ? 's' : ''} needed to offset</div>
+    </div>
+    ${sorted.slice(0, 5).map(([cat, kg]) => `
+      <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border);">
+        <span>${categoryEmojis[cat] || '📦'} ${cat}</span>
+        <span style="font-weight: 700;">${kg.toFixed(1)} kg</span>
+      </div>`).join('')}
+    <div style="margin-top: 12px; font-size: 0.75rem; color: var(--text-muted);">⚠️ Estimates are rough. Real impact depends on suppliers and choices.</div>`;
+}
+
+// ====== v1.9 Print/PDF & Tax export ======
+function printStatement() {
+  // Switch to dashboard before printing
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('dashboard').classList.add('active');
+  setTimeout(() => window.print(), 200);
+}
+
+function exportTaxCSV() {
+  const tagged = txns.filter(t => t.tax === true);
+  if (!tagged.length) {
+    return alert('No transactions tagged as tax-deductible.\n\nTo tag a transaction, click on it in the transactions list and select "Mark as tax-deductible".');
+  }
+  const rows = [['Date', 'Description', 'Category', 'Account', 'Amount']];
+  tagged.forEach(t => rows.push([t.date, t.desc, t.category, t.account, t.amount.toFixed(2)]));
+  const total = tagged.reduce((s, t) => s + t.amount, 0);
+  rows.push(['', '', '', 'TOTAL', total.toFixed(2)]);
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `tax-deductible-${new Date().toISOString().split('T')[0]}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  showToast(`✅ Exported ${tagged.length} tax-tagged transactions (€${total.toFixed(2)})`);
+}
+
+function toggleTxTaxFlag(id) {
+  const t = txns.find(x => x.id === id);
+  if (!t) return;
+  t.tax = !t.tax;
+  save();
+  render();
+  showToast(t.tax ? '💼 Marked as tax-deductible' : '✅ Tax flag removed');
 }
 
 // ====== v1.8 Round-up savings simulator ======
@@ -2336,14 +2718,15 @@ function renderAllTransactions() {
     const isIn = t._type === 'in';
     const sign = isIn ? '+' : '-';
     const color = isIn ? '#43e97b' : '#fa709a';
+    const taxBadge = t.tax ? '<span class="tax-badge">TAX</span>' : '';
     return `
     <div class="transaction-item">
       <div class="transaction-info">
-        <div class="transaction-desc">${(t.desc || '').replace(/</g,'&lt;')}</div>
+        <div class="transaction-desc">${(t.desc || '').replace(/</g,'&lt;')}${taxBadge}</div>
         <div class="transaction-meta">${t.category || (isIn ? 'Income' : '—')} • ${t.account || '—'} • ${t.date}</div>
       </div>
       <div style="display: flex; align-items: center; gap: 8px;">
-        <div class="transaction-amount" style="color:${color}; font-weight:700;" onclick="${isIn ? '' : `editTxn(${t.id})`}">${sign}€${t.amount.toFixed(2)}</div>
+        <div class="transaction-amount" style="color:${color}; font-weight:700;" onclick="${isIn ? '' : `editTxn(${t.id})`}">${sign}${currencySymbol()}${t.amount.toFixed(2)}</div>
         <button class="delete-btn" onclick="${isIn ? `deleteIncome(${t.id})` : `deleteTxn(${t.id})`}">×</button>
       </div>
     </div>`;
@@ -2526,6 +2909,13 @@ function render() {
   if (document.getElementById('roundUpSim')) renderRoundUpSim();
   if (document.getElementById('cashFlowForecast')) renderCashFlowForecast();
   if (document.getElementById('streaksDisplay')) renderStreaks();
+
+  // v1.9 niche
+  if (document.getElementById('accountCards')) renderAccountCards();
+  if (document.getElementById('saveRulesList')) renderSaveRules();
+  if (document.getElementById('co2Display')) renderCO2();
+  const baseSel = document.getElementById('baseCurrency');
+  if (baseSel) baseSel.value = baseCurrency;
 
   filterTransactions();
   renderCharts();
