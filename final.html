@@ -365,27 +365,28 @@ function importCSV(event) {
       const headerCols = parseCSVLine(lines[0]);
       const headerLower = headerCols.map(h => h.toLowerCase());
 
-      let dateIdx = -1, amountIdx = -1, descIdx = -1;
+      let dateIdx = -1, debitIdx = -1, creditIdx = -1, descIdx = -1;
 
       // Date column detection
       for (let i = 0; i < headerLower.length; i++) {
-        if (/date|posted|transaction|time|posted date/i.test(headerLower[i])) { dateIdx = i; break; }
+        if (/date|posted|transaction|time/i.test(headerLower[i])) { dateIdx = i; break; }
       }
 
-      // Amount column detection - check debit, credit, amount, withdrawn
+      // Amount column detection - find BOTH debit and credit
       for (let i = 0; i < headerLower.length; i++) {
-        if (/^amount|^debit|^withdrawn|^spent|^charge|^expense/.test(headerLower[i])) { amountIdx = i; break; }
+        if (/debit|withdrawn|spent|charge/.test(headerLower[i])) debitIdx = i;
+        if (/credit|income|deposit/.test(headerLower[i])) creditIdx = i;
       }
 
       // Description column detection
       for (let i = 0; i < headerLower.length; i++) {
-        if (/description|merchant|ref|payee|note|detail|narration|type/i.test(headerLower[i])) { descIdx = i; break; }
+        if (/description|merchant|ref|payee|note|detail|narration/i.test(headerLower[i])) { descIdx = i; break; }
       }
 
       // Fallback to position if not found
       if (dateIdx === -1) dateIdx = 0;
-      if (descIdx === -1) descIdx = 1;
-      if (amountIdx === -1) amountIdx = 2;
+      if (descIdx === -1) descIdx = 2;
+      if (debitIdx === -1 && creditIdx === -1) debitIdx = 5;
 
       let imported = 0;
 
@@ -394,8 +395,15 @@ function importCSV(event) {
         if (cols.length === 0 || !cols[dateIdx]) continue;
 
         const dateStr = cols[dateIdx] || '';
-        const amountStr = cols[amountIdx] || '0';
         const desc = cols[descIdx] || '';
+
+        // Get amount from either debit or credit column
+        let amountStr = '0';
+        if (debitIdx >= 0 && cols[debitIdx] && cols[debitIdx].trim()) {
+          amountStr = cols[debitIdx];
+        } else if (creditIdx >= 0 && cols[creditIdx] && cols[creditIdx].trim()) {
+          amountStr = cols[creditIdx];
+        }
 
         // Parse date
         let date = null;
@@ -411,9 +419,8 @@ function importCSV(event) {
 
         if (!date) continue;
 
-        // Parse amount - handle negatives in parentheses, remove symbols
+        // Parse amount - remove symbols and commas
         let cleanAmount = amountStr.replace(/[€$£¥,\s]/g, '').trim();
-        if (cleanAmount.match(/\(([0-9.]+)\)/)) cleanAmount = '-' + cleanAmount.match(/\(([0-9.]+)\)/)[1];
         const amount = Math.abs(parseFloat(cleanAmount));
 
         if (isNaN(amount) || amount === 0 || !desc) continue;
@@ -429,7 +436,7 @@ function importCSV(event) {
       }
 
       if (imported === 0) {
-        alert(`❌ Could not import transactions.\nChecked columns: ${dateIdx+1} (Date), ${amountIdx+1} (Amount), ${descIdx+1} (Description)\n\nPlease check CSV format.`);
+        alert(`❌ Could not import transactions.\nHeaders found: Debit(${debitIdx+1}), Credit(${creditIdx+1}), Date(${dateIdx+1}), Desc(${descIdx+1})`);
       } else {
         save();
         render();
@@ -457,27 +464,28 @@ function handleDrop(event) {
       const headerCols = parseCSVLine(lines[0]);
       const headerLower = headerCols.map(h => h.toLowerCase());
 
-      let dateIdx = -1, amountIdx = -1, descIdx = -1;
+      let dateIdx = -1, debitIdx = -1, creditIdx = -1, descIdx = -1;
 
       // Date column detection
       for (let i = 0; i < headerLower.length; i++) {
-        if (/date|posted|transaction|time|posted date/i.test(headerLower[i])) { dateIdx = i; break; }
+        if (/date|posted|transaction|time/i.test(headerLower[i])) { dateIdx = i; break; }
       }
 
-      // Amount column detection - check debit, credit, amount, withdrawn
+      // Amount column detection - find BOTH debit and credit
       for (let i = 0; i < headerLower.length; i++) {
-        if (/^amount|^debit|^withdrawn|^spent|^charge|^expense/.test(headerLower[i])) { amountIdx = i; break; }
+        if (/debit|withdrawn|spent|charge/.test(headerLower[i])) debitIdx = i;
+        if (/credit|income|deposit/.test(headerLower[i])) creditIdx = i;
       }
 
       // Description column detection
       for (let i = 0; i < headerLower.length; i++) {
-        if (/description|merchant|ref|payee|note|detail|narration|type/i.test(headerLower[i])) { descIdx = i; break; }
+        if (/description|merchant|ref|payee|note|detail|narration/i.test(headerLower[i])) { descIdx = i; break; }
       }
 
       // Fallback to position if not found
       if (dateIdx === -1) dateIdx = 0;
-      if (descIdx === -1) descIdx = 1;
-      if (amountIdx === -1) amountIdx = 2;
+      if (descIdx === -1) descIdx = 2;
+      if (debitIdx === -1 && creditIdx === -1) debitIdx = 5;
 
       let imported = 0;
 
@@ -486,8 +494,15 @@ function handleDrop(event) {
         if (cols.length === 0 || !cols[dateIdx]) continue;
 
         const dateStr = cols[dateIdx] || '';
-        const amountStr = cols[amountIdx] || '0';
         const desc = cols[descIdx] || '';
+
+        // Get amount from either debit or credit column
+        let amountStr = '0';
+        if (debitIdx >= 0 && cols[debitIdx] && cols[debitIdx].trim()) {
+          amountStr = cols[debitIdx];
+        } else if (creditIdx >= 0 && cols[creditIdx] && cols[creditIdx].trim()) {
+          amountStr = cols[creditIdx];
+        }
 
         // Parse date
         let date = null;
@@ -503,9 +518,8 @@ function handleDrop(event) {
 
         if (!date) continue;
 
-        // Parse amount - handle negatives in parentheses, remove symbols
+        // Parse amount - remove symbols and commas
         let cleanAmount = amountStr.replace(/[€$£¥,\s]/g, '').trim();
-        if (cleanAmount.match(/\(([0-9.]+)\)/)) cleanAmount = '-' + cleanAmount.match(/\(([0-9.]+)\)/)[1];
         const amount = Math.abs(parseFloat(cleanAmount));
 
         if (isNaN(amount) || amount === 0 || !desc) continue;
@@ -521,7 +535,7 @@ function handleDrop(event) {
       }
 
       if (imported === 0) {
-        alert(`❌ Could not import transactions.\nChecked columns: ${dateIdx+1} (Date), ${amountIdx+1} (Amount), ${descIdx+1} (Description)\n\nPlease check CSV format.`);
+        alert(`❌ Could not import transactions.\nHeaders found: Debit(${debitIdx+1}), Credit(${creditIdx+1}), Date(${dateIdx+1}), Desc(${descIdx+1})`);
       } else {
         save();
         render();
