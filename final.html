@@ -367,24 +367,43 @@ function importCSV(event) {
 
       let dateIdx = -1, debitIdx = -1, creditIdx = -1, descIdx = -1;
 
-      // Date column detection
+      // Date column detection - prefer "posted transactions date" or similar
       for (let i = 0; i < headerLower.length; i++) {
-        if (/date|posted|transaction|time/i.test(headerLower[i])) { dateIdx = i; break; }
+        const h = headerLower[i];
+        if ((h.includes('posted') && h.includes('date')) || h.includes('transaction date') || h.includes('posting date')) {
+          dateIdx = i; break;
+        }
+      }
+      // Fallback: just look for "date" without "currency"
+      if (dateIdx === -1) {
+        for (let i = 0; i < headerLower.length; i++) {
+          const h = headerLower[i];
+          if (h.includes('date') && !h.includes('currency')) { dateIdx = i; break; }
+        }
       }
 
       // Amount column detection - find BOTH debit and credit
       for (let i = 0; i < headerLower.length; i++) {
-        if (/debit|withdrawn|spent|charge/.test(headerLower[i])) debitIdx = i;
-        if (/credit|income|deposit/.test(headerLower[i])) creditIdx = i;
+        if (/debit/.test(headerLower[i])) debitIdx = i;
+        if (/credit/.test(headerLower[i])) creditIdx = i;
       }
 
-      // Description column detection
+      // Description column detection - prefer "description1" or first description column
       for (let i = 0; i < headerLower.length; i++) {
-        if (/description|merchant|ref|payee|note|detail|narration/i.test(headerLower[i])) { descIdx = i; break; }
+        const h = headerLower[i];
+        if (h.includes('description') && !h.includes('description2') && !h.includes('description3')) {
+          descIdx = i; break;
+        }
+      }
+      // Fallback: any description column
+      if (descIdx === -1) {
+        for (let i = 0; i < headerLower.length; i++) {
+          if (headerLower[i].includes('description')) { descIdx = i; break; }
+        }
       }
 
       // Fallback to position if not found
-      if (dateIdx === -1) dateIdx = 0;
+      if (dateIdx === -1) dateIdx = 1;
       if (descIdx === -1) descIdx = 2;
       if (debitIdx === -1 && creditIdx === -1) debitIdx = 5;
 
@@ -466,24 +485,43 @@ function handleDrop(event) {
 
       let dateIdx = -1, debitIdx = -1, creditIdx = -1, descIdx = -1;
 
-      // Date column detection
+      // Date column detection - prefer "posted transactions date" or similar
       for (let i = 0; i < headerLower.length; i++) {
-        if (/date|posted|transaction|time/i.test(headerLower[i])) { dateIdx = i; break; }
+        const h = headerLower[i];
+        if ((h.includes('posted') && h.includes('date')) || h.includes('transaction date') || h.includes('posting date')) {
+          dateIdx = i; break;
+        }
+      }
+      // Fallback: just look for "date" without "currency"
+      if (dateIdx === -1) {
+        for (let i = 0; i < headerLower.length; i++) {
+          const h = headerLower[i];
+          if (h.includes('date') && !h.includes('currency')) { dateIdx = i; break; }
+        }
       }
 
       // Amount column detection - find BOTH debit and credit
       for (let i = 0; i < headerLower.length; i++) {
-        if (/debit|withdrawn|spent|charge/.test(headerLower[i])) debitIdx = i;
-        if (/credit|income|deposit/.test(headerLower[i])) creditIdx = i;
+        if (/debit/.test(headerLower[i])) debitIdx = i;
+        if (/credit/.test(headerLower[i])) creditIdx = i;
       }
 
-      // Description column detection
+      // Description column detection - prefer "description1" or first description column
       for (let i = 0; i < headerLower.length; i++) {
-        if (/description|merchant|ref|payee|note|detail|narration/i.test(headerLower[i])) { descIdx = i; break; }
+        const h = headerLower[i];
+        if (h.includes('description') && !h.includes('description2') && !h.includes('description3')) {
+          descIdx = i; break;
+        }
+      }
+      // Fallback: any description column
+      if (descIdx === -1) {
+        for (let i = 0; i < headerLower.length; i++) {
+          if (headerLower[i].includes('description')) { descIdx = i; break; }
+        }
       }
 
       // Fallback to position if not found
-      if (dateIdx === -1) dateIdx = 0;
+      if (dateIdx === -1) dateIdx = 1;
       if (descIdx === -1) descIdx = 2;
       if (debitIdx === -1 && creditIdx === -1) debitIdx = 5;
 
