@@ -169,6 +169,8 @@
 <div class="emoji-nav">
   <button class="active" onclick="switchSection(event, 'dashboard')"><span class="emoji">🏠</span><span>Home</span></button>
   <button onclick="switchSection(event, 'daily-log')"><span class="emoji">💳</span><span>Spend</span></button>
+  <button onclick="switchSection(event, 'insights')"><span class="emoji">💡</span><span>Insights</span></button>
+  <button onclick="switchSection(event, 'goals')"><span class="emoji">🎯</span><span>Goals</span></button>
   <button onclick="switchSection(event, 'transactions')"><span class="emoji">📊</span><span>Stats</span></button>
   <button onclick="switchSection(event, 'settings')"><span class="emoji">⚙️</span><span>Settings</span></button>
 </div>
@@ -177,6 +179,15 @@
 
   <!-- Dashboard -->
   <div id="dashboard" class="section active">
+    <!-- Spending alerts banner -->
+    <div id="alertBanner" style="display: none;"></div>
+
+    <!-- Payday-to-payday card (only if payday set) -->
+    <div id="paydayCard" style="display: none;" class="form-card">
+      <h3>📆 Payday Cycle</h3>
+      <div id="paydayContent"></div>
+    </div>
+
     <!-- Hero spend number -->
     <div class="hero-card" id="heroCard">
       <div class="label">This Week</div>
@@ -338,6 +349,102 @@
     </div>
   </div>
 
+  <!-- Insights -->
+  <div id="insights" class="section">
+    <h2 style="margin-bottom: 16px; color: #2c3e50;">💡 Insights</h2>
+
+    <!-- Weekly recap -->
+    <div class="form-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
+      <h3 style="color: white;">📰 This Week's Recap</h3>
+      <div id="weeklyRecap" style="line-height: 1.8;"></div>
+    </div>
+
+    <!-- Subscription detection -->
+    <div class="form-card">
+      <h3>🔁 Recurring Subscriptions</h3>
+      <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Auto-detected from your transaction history (same merchant, similar amount, ~monthly)</p>
+      <div id="subscriptionsList"></div>
+    </div>
+
+    <!-- Bill calendar -->
+    <div class="form-card">
+      <h3>📅 Upcoming Bills (Next 30 Days)</h3>
+      <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Predicted from recurring patterns</p>
+      <div id="billCalendar"></div>
+    </div>
+  </div>
+
+  <!-- Goals -->
+  <div id="goals" class="section">
+    <h2 style="margin-bottom: 16px; color: #2c3e50;">🎯 Goals & Net Worth</h2>
+
+    <!-- Net worth -->
+    <div class="hero-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+      <div class="label">Net Worth</div>
+      <div class="amount" id="netWorthValue">€0</div>
+      <div class="sub" id="netWorthSub">Assets minus liabilities</div>
+    </div>
+
+    <!-- Savings goals -->
+    <div class="form-card">
+      <h3>🎯 Savings Goals</h3>
+      <p style="color: #8fa3b8; margin-bottom: 12px; font-size: 0.9rem;">Track progress toward what matters</p>
+      <div id="goalsList"></div>
+      <details style="margin-top: 16px;">
+        <summary style="cursor: pointer; font-weight: 700; color: #667eea;">+ Add a goal</summary>
+        <div class="form-grid" style="margin-top: 12px;">
+          <div class="form-group"><label>Goal name</label><input type="text" id="goalName" placeholder="e.g. Holiday fund"></div>
+          <div class="form-group"><label>Target (€)</label><input type="number" id="goalTarget" step="0.01" placeholder="1000"></div>
+          <div class="form-group"><label>Saved so far (€)</label><input type="number" id="goalCurrent" step="0.01" placeholder="0"></div>
+        </div>
+        <button class="btn btn-primary" onclick="addGoal()" style="width: 100%; margin-top: 8px;">Add Goal</button>
+      </details>
+    </div>
+
+    <!-- Assets -->
+    <div class="form-card">
+      <h3>💼 Assets</h3>
+      <div id="assetsList"></div>
+      <details style="margin-top: 12px;">
+        <summary style="cursor: pointer; font-weight: 700; color: #667eea;">+ Add asset</summary>
+        <div class="form-grid" style="margin-top: 12px;">
+          <div class="form-group"><label>Name</label><input type="text" id="assetName" placeholder="e.g. House, Car, Savings"></div>
+          <div class="form-group"><label>Value (€)</label><input type="number" id="assetValue" step="0.01"></div>
+        </div>
+        <button class="btn btn-primary" onclick="addAsset()" style="width: 100%; margin-top: 8px;">Add Asset</button>
+      </details>
+    </div>
+
+    <!-- Liabilities -->
+    <div class="form-card">
+      <h3>💳 Liabilities (Debts)</h3>
+      <div id="liabilitiesList"></div>
+      <details style="margin-top: 12px;">
+        <summary style="cursor: pointer; font-weight: 700; color: #667eea;">+ Add liability</summary>
+        <div class="form-grid" style="margin-top: 12px;">
+          <div class="form-group"><label>Name</label><input type="text" id="liabilityName" placeholder="e.g. Mortgage, Loan, Credit Card"></div>
+          <div class="form-group"><label>Amount owed (€)</label><input type="number" id="liabilityValue" step="0.01"></div>
+        </div>
+        <button class="btn btn-primary" onclick="addLiability()" style="width: 100%; margin-top: 8px;">Add Liability</button>
+      </details>
+    </div>
+
+    <!-- Pots/envelopes -->
+    <div class="form-card">
+      <h3>💰 Savings Pots</h3>
+      <p style="color: #8fa3b8; margin-bottom: 12px; font-size: 0.9rem;">Virtual sub-accounts to allocate money</p>
+      <div id="potsList"></div>
+      <details style="margin-top: 12px;">
+        <summary style="cursor: pointer; font-weight: 700; color: #667eea;">+ Add pot</summary>
+        <div class="form-grid" style="margin-top: 12px;">
+          <div class="form-group"><label>Pot name</label><input type="text" id="potName" placeholder="e.g. Rainy day, Christmas"></div>
+          <div class="form-group"><label>Balance (€)</label><input type="number" id="potBalance" step="0.01"></div>
+        </div>
+        <button class="btn btn-primary" onclick="addPot()" style="width: 100%; margin-top: 8px;">Add Pot</button>
+      </details>
+    </div>
+  </div>
+
   <!-- Settings -->
   <div id="settings" class="section">
     <div class="form-card">
@@ -361,6 +468,15 @@
     </div>
 
     <div class="form-card">
+      <h3>📆 Payday Cycle</h3>
+      <p style="color: #8fa3b8; margin-bottom: 12px; font-size: 0.9rem;">Day of month you get paid (1-31). Used for payday-to-payday spending view.</p>
+      <div class="form-grid">
+        <div class="form-group"><label>Payday</label><input type="number" id="paydayInput" min="1" max="31" placeholder="25"></div>
+      </div>
+      <button class="btn btn-primary" onclick="savePayday()" style="width: 100%; margin-top: 8px;">Save Payday</button>
+    </div>
+
+    <div class="form-card">
       <h3>📊 Data</h3>
       <button class="btn btn-primary" onclick="loadSampleData()" style="width: 100%; margin-bottom: 12px;">Load Sample Data</button>
       <button class="btn btn-primary" style="background: #e74c3c; width: 100%;" onclick="clearAllData()">Clear All Data</button>
@@ -376,6 +492,15 @@ let catBudgets = JSON.parse(localStorage.getItem('catBudgets') || '{}');
 let weeklyBudget = parseFloat(localStorage.getItem('weeklyBudget') || '1725');
 let transactionType = 'out';
 
+// v1.6 data
+let goals = JSON.parse(localStorage.getItem('goals') || '[]');
+let assets = JSON.parse(localStorage.getItem('assets') || '[]');
+let liabilities = JSON.parse(localStorage.getItem('liabilities') || '[]');
+let pots = JSON.parse(localStorage.getItem('pots') || '[]');
+let paydayDay = parseInt(localStorage.getItem('paydayDay') || '0') || null;
+let userCategoryRules = JSON.parse(localStorage.getItem('userCategoryRules') || '{}');
+let alertedThisSession = {};
+
 const categories = ['Groceries', 'Fuel & Transport', 'Utilities & Bills', 'Subscriptions', 'Eating Out & Coffee', 'Kids & Family', 'Health & Fitness', 'Personal & Discretionary'];
 const accounts = ['AIB Personal', 'AIB Business', 'Revolut', 'Credit Union', 'Cash'];
 
@@ -384,6 +509,12 @@ function save() {
   localStorage.setItem('income', JSON.stringify(income));
   localStorage.setItem('catBudgets', JSON.stringify(catBudgets));
   localStorage.setItem('weeklyBudget', weeklyBudget);
+  localStorage.setItem('goals', JSON.stringify(goals));
+  localStorage.setItem('assets', JSON.stringify(assets));
+  localStorage.setItem('liabilities', JSON.stringify(liabilities));
+  localStorage.setItem('pots', JSON.stringify(pots));
+  if (paydayDay) localStorage.setItem('paydayDay', String(paydayDay));
+  localStorage.setItem('userCategoryRules', JSON.stringify(userCategoryRules));
 }
 
 function switchSection(event, sectionId) {
@@ -453,16 +584,27 @@ function showToast(msg) {
 function editTxn(id) {
   const txn = txns.find(t => t.id === id);
   if (!txn) return;
+  // Step 1: amount
   const newAmount = prompt(`Edit amount for "${txn.desc}":\n\nCurrent: €${txn.amount.toFixed(2)}`, txn.amount.toFixed(2));
-  if (newAmount !== null && newAmount !== '') {
-    const amount = parseFloat(newAmount);
-    if (amount > 0) {
-      txn.amount = amount;
-      save();
-      render();
-      alert('✅ Amount updated!');
+  if (newAmount === null || newAmount === '') return;
+  const amount = parseFloat(newAmount);
+  if (!amount || amount <= 0) return;
+  txn.amount = amount;
+
+  // Step 2: optional category change
+  const catList = categories.map((c, i) => `${i + 1}. ${c}`).join('\n');
+  const choice = prompt(`Category for "${txn.desc}"?\n\nCurrent: ${txn.category}\n\nEnter number to change, or leave blank to keep:\n${catList}`);
+  if (choice && /^\d+$/.test(choice.trim())) {
+    const idx = parseInt(choice.trim()) - 1;
+    if (idx >= 0 && idx < categories.length) {
+      const newCat = categories[idx];
+      txn.category = newCat;
+      learnCategoryRule(txn.desc, newCat);
+      showToast(`✅ Will categorise "${txn.desc}" as ${newCat} from now on`);
     }
   }
+  save();
+  render();
 }
 
 function deleteTxn(id) {
@@ -765,7 +907,10 @@ function importCSV(event) {
 
         // Use category from CSV if present, otherwise auto-categorize
         let cat = 'Personal & Discretionary';
-        if (cols.category !== -1 && parts[cols.category]) {
+        // First check user-learned rules
+        const learned = applyLearnedCategory(desc);
+        if (learned) cat = learned;
+        else if (cols.category !== -1 && parts[cols.category]) {
           const csvCat = parts[cols.category].toLowerCase();
           // Map common CSV categories to our buckets
           if (/grocer|food|supermarket/.test(csvCat)) cat = 'Groceries';
@@ -776,9 +921,11 @@ function importCSV(event) {
           else if (/health|fitness|medical/.test(csvCat)) cat = 'Health & Fitness';
           else if (/kid|child|family/.test(csvCat)) cat = 'Kids & Family';
         }
-        // Auto-categorize from description
-        for (const [c, regex] of Object.entries(csvAutoCategories)) {
-          if (regex.test(desc)) { cat = c; break; }
+        // Auto-categorize from description (only if no learned rule)
+        if (!learned) {
+          for (const [c, regex] of Object.entries(csvAutoCategories)) {
+            if (regex.test(desc)) { cat = c; break; }
+          }
         }
 
         const id = Date.now() + Math.random();
@@ -1116,6 +1263,401 @@ function renderHeatmap() {
   grid.innerHTML = html;
 }
 
+// ====== v1.6 Subscription detection ======
+function detectSubscriptions() {
+  // Group txns by normalized merchant key
+  const groups = {};
+  txns.forEach(t => {
+    const key = (t.desc || '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 20);
+    if (!key) return;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+
+  // For each group, look for ~monthly recurrence (interval 25-35 days) with similar amounts
+  const subs = [];
+  for (const [key, items] of Object.entries(groups)) {
+    if (items.length < 2) continue;
+    const sorted = items.sort((a, b) => new Date(a.date) - new Date(b.date));
+    // Calculate intervals
+    const intervals = [];
+    for (let i = 1; i < sorted.length; i++) {
+      const days = (new Date(sorted[i].date) - new Date(sorted[i-1].date)) / 86400000;
+      intervals.push(days);
+    }
+    if (!intervals.length) continue;
+    const avgInterval = intervals.reduce((a,b) => a+b, 0) / intervals.length;
+    // Monthly: 25-35, weekly: 5-9, quarterly: 80-100
+    let cycle = null;
+    if (avgInterval >= 25 && avgInterval <= 35) cycle = 'Monthly';
+    else if (avgInterval >= 5 && avgInterval <= 9) cycle = 'Weekly';
+    else if (avgInterval >= 13 && avgInterval <= 16) cycle = 'Fortnightly';
+    else if (avgInterval >= 80 && avgInterval <= 100) cycle = 'Quarterly';
+    else if (avgInterval >= 350 && avgInterval <= 380) cycle = 'Yearly';
+    if (!cycle) continue;
+    // Average amount and last transaction
+    const avgAmount = items.reduce((s,t) => s + t.amount, 0) / items.length;
+    const last = sorted[sorted.length - 1];
+    const next = new Date(last.date);
+    next.setDate(next.getDate() + Math.round(avgInterval));
+    subs.push({
+      desc: last.desc,
+      cycle,
+      avgAmount,
+      lastDate: last.date,
+      nextDate: next.toISOString().split('T')[0],
+      count: items.length,
+      category: last.category || 'Subscriptions',
+    });
+  }
+  return subs.sort((a, b) => b.avgAmount - a.avgAmount);
+}
+
+function renderSubscriptions() {
+  const list = document.getElementById('subscriptionsList');
+  if (!list) return;
+  const subs = detectSubscriptions();
+  if (!subs.length) {
+    list.innerHTML = '<div style="color: #8fa3b8; padding: 20px; text-align: center;">No recurring subscriptions detected yet — import more history or add transactions over time.</div>';
+    return;
+  }
+  const total = subs.filter(s => s.cycle === 'Monthly').reduce((s,x) => s + x.avgAmount, 0);
+  let html = `<div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-weight: 700;">💸 Estimated monthly subscription cost: €${total.toFixed(2)}</div>`;
+  html += subs.map(s => `
+    <div class="transaction-item">
+      <div class="transaction-info">
+        <div class="transaction-desc">${(s.desc || '').replace(/</g,'&lt;')}</div>
+        <div class="transaction-meta">${s.cycle} • ${s.count} payments • next ~${s.nextDate}</div>
+      </div>
+      <div class="transaction-amount">€${s.avgAmount.toFixed(2)}</div>
+    </div>`).join('');
+  list.innerHTML = html;
+}
+
+// ====== v1.6 Bill calendar ======
+function renderBillCalendar() {
+  const cal = document.getElementById('billCalendar');
+  if (!cal) return;
+  const subs = detectSubscriptions();
+  const now = new Date();
+  const horizon = new Date(now);
+  horizon.setDate(now.getDate() + 30);
+
+  const upcoming = subs
+    .filter(s => {
+      const next = new Date(s.nextDate);
+      return next >= now && next <= horizon;
+    })
+    .sort((a, b) => new Date(a.nextDate) - new Date(b.nextDate));
+
+  if (!upcoming.length) {
+    cal.innerHTML = '<div style="color: #8fa3b8; padding: 20px; text-align: center;">No bills detected for the next 30 days.</div>';
+    return;
+  }
+  const total = upcoming.reduce((s, x) => s + x.avgAmount, 0);
+  let html = `<div style="background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-weight: 700;">⚠️ Coming out: €${total.toFixed(2)} across ${upcoming.length} payments</div>`;
+  html += upcoming.map(s => {
+    const daysAway = Math.round((new Date(s.nextDate) - now) / 86400000);
+    return `
+      <div class="transaction-item">
+        <div class="transaction-info">
+          <div class="transaction-desc">${(s.desc || '').replace(/</g,'&lt;')}</div>
+          <div class="transaction-meta">${s.nextDate} • in ${daysAway} day${daysAway === 1 ? '' : 's'} • ${s.cycle.toLowerCase()}</div>
+        </div>
+        <div class="transaction-amount">€${s.avgAmount.toFixed(2)}</div>
+      </div>`;
+  }).join('');
+  cal.innerHTML = html;
+}
+
+// ====== v1.6 Spending alerts ======
+function checkSpendingAlerts(weekSpent, target) {
+  const banner = document.getElementById('alertBanner');
+  if (!banner) return;
+  if (target <= 0) { banner.style.display = 'none'; return; }
+  const pct = (weekSpent / target) * 100;
+  let bg = '', icon = '', msg = '', show = false;
+  if (pct >= 100) {
+    bg = '#ff5e5e'; icon = '🚨'; show = true;
+    msg = `You're €${(weekSpent - target).toFixed(2)} over your weekly target of €${target}`;
+    if (!alertedThisSession.over) { showToast(`🚨 Over budget: ${msg}`); alertedThisSession.over = true; }
+  } else if (pct >= 80) {
+    bg = '#f6a93b'; icon = '⚠️'; show = true;
+    msg = `You've spent ${pct.toFixed(0)}% of your weekly target — €${(target - weekSpent).toFixed(2)} left`;
+    if (!alertedThisSession.warn && pct >= 80 && pct < 100) { showToast(`⚠️ ${pct.toFixed(0)}% of weekly budget used`); alertedThisSession.warn = true; }
+  }
+  if (show) {
+    banner.innerHTML = `<div style="background:${bg}; color:white; padding:14px 20px; border-radius:12px; margin-bottom:16px; font-weight:600; box-shadow:0 4px 12px rgba(0,0,0,0.1);">${icon} ${msg}</div>`;
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+// ====== v1.6 Weekly recap ======
+function renderWeeklyRecap() {
+  const out = document.getElementById('weeklyRecap');
+  if (!out) return;
+  const { start, end } = getWeekRange();
+  const lastStart = new Date(new Date(start).getTime() - 7 * 86400000).toISOString().split('T')[0];
+  const lastEnd = new Date(new Date(end).getTime() - 7 * 86400000).toISOString().split('T')[0];
+
+  const thisWeek = txns.filter(t => t.date >= start && t.date <= end);
+  const lastWeek = txns.filter(t => t.date >= lastStart && t.date <= lastEnd);
+  const thisTotal = thisWeek.reduce((s, t) => s + t.amount, 0);
+  const lastTotal = lastWeek.reduce((s, t) => s + t.amount, 0);
+  const diff = thisTotal - lastTotal;
+  const diffPct = lastTotal > 0 ? ((diff / lastTotal) * 100).toFixed(0) : 0;
+
+  // Top category
+  const catSums = {};
+  thisWeek.forEach(t => { catSums[t.category] = (catSums[t.category] || 0) + t.amount; });
+  const topCat = Object.entries(catSums).sort((a, b) => b[1] - a[1])[0];
+
+  // Biggest single transaction
+  const biggest = thisWeek.sort((a, b) => b.amount - a.amount)[0];
+
+  if (!thisWeek.length) {
+    out.innerHTML = 'No spending this week yet.';
+    return;
+  }
+
+  let html = `📊 <strong>€${thisTotal.toFixed(2)}</strong> spent this week`;
+  if (lastTotal > 0) {
+    const arrow = diff > 0 ? '⬆️' : '⬇️';
+    const word = diff > 0 ? 'more' : 'less';
+    html += `<br>${arrow} €${Math.abs(diff).toFixed(2)} ${word} than last week (${diff > 0 ? '+' : ''}${diffPct}%)`;
+  }
+  if (topCat) html += `<br>🏆 Biggest category: <strong>${topCat[0]}</strong> at €${topCat[1].toFixed(2)}`;
+  if (biggest) html += `<br>💸 Biggest single tx: <strong>${biggest.desc}</strong> at €${biggest.amount.toFixed(2)}`;
+  // Best/worst day
+  const dayTotals = {};
+  thisWeek.forEach(t => { dayTotals[t.date] = (dayTotals[t.date] || 0) + t.amount; });
+  const days = Object.entries(dayTotals).sort((a, b) => b[1] - a[1]);
+  if (days.length > 1) html += `<br>📅 Heaviest day: ${days[0][0]} (€${days[0][1].toFixed(2)})`;
+
+  out.innerHTML = html;
+}
+
+// ====== v1.6 Goals ======
+function addGoal() {
+  const name = document.getElementById('goalName').value.trim();
+  const target = parseFloat(document.getElementById('goalTarget').value);
+  const current = parseFloat(document.getElementById('goalCurrent').value) || 0;
+  if (!name || !target || target <= 0) return alert('Enter a name and target amount');
+  goals.push({ id: Date.now(), name, target, current });
+  save();
+  document.getElementById('goalName').value = '';
+  document.getElementById('goalTarget').value = '';
+  document.getElementById('goalCurrent').value = '';
+  renderGoals();
+  showToast(`✅ Goal "${name}" added`);
+}
+function updateGoal(id, current) {
+  const g = goals.find(x => x.id === id);
+  if (!g) return;
+  g.current = parseFloat(current) || 0;
+  save();
+  renderGoals();
+}
+function deleteGoal(id) {
+  if (!confirm('Delete this goal?')) return;
+  goals = goals.filter(g => g.id !== id);
+  save();
+  renderGoals();
+}
+function renderGoals() {
+  const list = document.getElementById('goalsList');
+  if (!list) return;
+  if (!goals.length) { list.innerHTML = '<div style="color: #8fa3b8; padding: 12px; text-align: center;">No goals yet. Add one below 👇</div>'; return; }
+  list.innerHTML = goals.map(g => {
+    const pct = Math.min(100, (g.current / g.target) * 100);
+    const done = pct >= 100;
+    return `
+      <div style="background: #f8f9fa; padding: 16px; border-radius: 12px; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <strong>${done ? '🏆 ' : '🎯 '}${g.name}</strong>
+          <button class="delete-btn" onclick="deleteGoal(${g.id})" style="background:none; border:none; cursor:pointer;">×</button>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%; background:${done ? '#27ae60' : '#667eea'};"></div></div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #8fa3b8; margin-top: 6px;">
+          <span>€${g.current.toFixed(2)} of €${g.target.toFixed(2)}</span>
+          <span>${pct.toFixed(0)}%</span>
+        </div>
+        <input type="number" step="0.01" value="${g.current}" onchange="updateGoal(${g.id}, this.value)"
+          style="margin-top: 8px; width: 100%; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px;" placeholder="Update saved amount">
+      </div>`;
+  }).join('');
+}
+
+// ====== v1.6 Assets / Liabilities / Net Worth ======
+function addAsset() {
+  const name = document.getElementById('assetName').value.trim();
+  const value = parseFloat(document.getElementById('assetValue').value);
+  if (!name || !value) return alert('Enter name and value');
+  assets.push({ id: Date.now(), name, value });
+  save();
+  document.getElementById('assetName').value = '';
+  document.getElementById('assetValue').value = '';
+  renderNetWorth();
+  showToast(`✅ Asset "${name}" added`);
+}
+function deleteAsset(id) {
+  if (!confirm('Delete this asset?')) return;
+  assets = assets.filter(a => a.id !== id);
+  save();
+  renderNetWorth();
+}
+function addLiability() {
+  const name = document.getElementById('liabilityName').value.trim();
+  const value = parseFloat(document.getElementById('liabilityValue').value);
+  if (!name || !value) return alert('Enter name and amount');
+  liabilities.push({ id: Date.now(), name, value });
+  save();
+  document.getElementById('liabilityName').value = '';
+  document.getElementById('liabilityValue').value = '';
+  renderNetWorth();
+  showToast(`✅ Liability "${name}" added`);
+}
+function deleteLiability(id) {
+  if (!confirm('Delete this liability?')) return;
+  liabilities = liabilities.filter(l => l.id !== id);
+  save();
+  renderNetWorth();
+}
+function renderNetWorth() {
+  const aList = document.getElementById('assetsList');
+  const lList = document.getElementById('liabilitiesList');
+  const valEl = document.getElementById('netWorthValue');
+  const subEl = document.getElementById('netWorthSub');
+  if (!aList || !lList) return;
+  const totalAssets = assets.reduce((s, a) => s + a.value, 0);
+  const totalLiab = liabilities.reduce((s, l) => s + l.value, 0);
+  const net = totalAssets - totalLiab;
+  if (valEl) valEl.textContent = (net < 0 ? '-€' : '€') + Math.abs(net).toLocaleString('en-IE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  if (subEl) subEl.textContent = `€${totalAssets.toLocaleString('en-IE')} assets − €${totalLiab.toLocaleString('en-IE')} liabilities`;
+
+  aList.innerHTML = assets.length ? assets.map(a => `
+    <div class="transaction-item">
+      <div class="transaction-info"><div class="transaction-desc">${a.name}</div></div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <div class="transaction-amount" style="color:#27ae60;">+€${a.value.toFixed(2)}</div>
+        <button class="delete-btn" onclick="deleteAsset(${a.id})">×</button>
+      </div>
+    </div>`).join('') : '<div style="color:#8fa3b8; padding:12px; text-align:center;">No assets yet</div>';
+
+  lList.innerHTML = liabilities.length ? liabilities.map(l => `
+    <div class="transaction-item">
+      <div class="transaction-info"><div class="transaction-desc">${l.name}</div></div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <div class="transaction-amount" style="color:#e74c3c;">-€${l.value.toFixed(2)}</div>
+        <button class="delete-btn" onclick="deleteLiability(${l.id})">×</button>
+      </div>
+    </div>`).join('') : '<div style="color:#8fa3b8; padding:12px; text-align:center;">No liabilities yet</div>';
+}
+
+// ====== v1.6 Pots ======
+function addPot() {
+  const name = document.getElementById('potName').value.trim();
+  const balance = parseFloat(document.getElementById('potBalance').value) || 0;
+  if (!name) return alert('Enter a pot name');
+  pots.push({ id: Date.now(), name, balance });
+  save();
+  document.getElementById('potName').value = '';
+  document.getElementById('potBalance').value = '';
+  renderPots();
+  showToast(`✅ Pot "${name}" added`);
+}
+function updatePot(id, balance) {
+  const p = pots.find(x => x.id === id);
+  if (!p) return;
+  p.balance = parseFloat(balance) || 0;
+  save();
+  renderPots();
+}
+function deletePot(id) {
+  if (!confirm('Delete this pot?')) return;
+  pots = pots.filter(p => p.id !== id);
+  save();
+  renderPots();
+}
+function renderPots() {
+  const list = document.getElementById('potsList');
+  if (!list) return;
+  if (!pots.length) { list.innerHTML = '<div style="color:#8fa3b8; padding:12px; text-align:center;">No pots yet. Add one below 👇</div>'; return; }
+  const total = pots.reduce((s, p) => s + p.balance, 0);
+  let html = `<div style="background:#f8f9fa; padding:12px; border-radius:8px; margin-bottom:12px; font-weight:700;">💰 Total in pots: €${total.toFixed(2)}</div>`;
+  html += pots.map(p => `
+    <div style="background:#f8f9fa; padding:14px; border-radius:10px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <div style="flex:1;">
+        <div style="font-weight:700;">💰 ${p.name}</div>
+        <input type="number" step="0.01" value="${p.balance}" onchange="updatePot(${p.id}, this.value)"
+          style="margin-top:4px; padding:6px 8px; border:1px solid #e5e7eb; border-radius:6px; width:120px;">
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <div style="font-weight:800; color:#667eea;">€${p.balance.toFixed(2)}</div>
+        <button class="delete-btn" onclick="deletePot(${p.id})">×</button>
+      </div>
+    </div>`).join('');
+  list.innerHTML = html;
+}
+
+// ====== v1.6 Payday cycle ======
+function savePayday() {
+  const v = parseInt(document.getElementById('paydayInput').value);
+  if (!v || v < 1 || v > 31) return alert('Enter a day 1-31');
+  paydayDay = v;
+  save();
+  showToast(`✅ Payday set to ${v}${suffix(v)} of month`);
+  render();
+}
+function suffix(n) { const s = ['th','st','nd','rd']; const v = n % 100; return s[(v - 20) % 10] || s[v] || s[0]; }
+function renderPaydayCard() {
+  const card = document.getElementById('paydayCard');
+  const content = document.getElementById('paydayContent');
+  if (!card || !content) return;
+  if (!paydayDay) { card.style.display = 'none'; return; }
+
+  const today = new Date();
+  // Calculate cycle: from last payday to next payday
+  let lastPayday = new Date(today.getFullYear(), today.getMonth(), paydayDay);
+  if (lastPayday > today) lastPayday = new Date(today.getFullYear(), today.getMonth() - 1, paydayDay);
+  let nextPayday = new Date(lastPayday);
+  nextPayday.setMonth(nextPayday.getMonth() + 1);
+
+  const startStr = lastPayday.toISOString().split('T')[0];
+  const endStr = nextPayday.toISOString().split('T')[0];
+  const todayStr = today.toISOString().split('T')[0];
+
+  const cycleSpend = txns.filter(t => t.date >= startStr && t.date <= todayStr).reduce((s, t) => s + t.amount, 0);
+  const daysIn = Math.round((today - lastPayday) / 86400000);
+  const daysToNext = Math.round((nextPayday - today) / 86400000);
+  const dailyAvg = daysIn > 0 ? cycleSpend / daysIn : 0;
+  const projected = dailyAvg * 30;
+
+  card.style.display = 'block';
+  content.innerHTML = `
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 8px;">
+      <div><div style="font-size:0.85rem; color:#8fa3b8;">Spent this cycle</div><div style="font-size:1.6rem; font-weight:800; color:#2c3e50;">€${cycleSpend.toFixed(2)}</div></div>
+      <div><div style="font-size:0.85rem; color:#8fa3b8;">Daily average</div><div style="font-size:1.6rem; font-weight:800; color:#2c3e50;">€${dailyAvg.toFixed(2)}</div></div>
+      <div><div style="font-size:0.85rem; color:#8fa3b8;">Days to payday</div><div style="font-size:1.6rem; font-weight:800; color:#667eea;">${daysToNext}</div></div>
+      <div><div style="font-size:0.85rem; color:#8fa3b8;">Projected total</div><div style="font-size:1.6rem; font-weight:800; color:#2c3e50;">€${projected.toFixed(2)}</div></div>
+    </div>`;
+}
+
+// ====== v1.6 AI categorisation learning ======
+function learnCategoryRule(desc, category) {
+  if (!desc || !category) return;
+  const key = desc.toLowerCase().replace(/[^a-z]/g, '').slice(0, 30);
+  if (!key) return;
+  userCategoryRules[key] = category;
+  save();
+}
+function applyLearnedCategory(desc) {
+  const key = (desc || '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 30);
+  return userCategoryRules[key] || null;
+}
+
 // ====== v1.5 Drill-down from rings ======
 function drillIntoCategory(cat) {
   // Switch to Stats/Transactions tab
@@ -1448,6 +1990,17 @@ function render() {
   renderRings();
   renderHeatmap();
   if (!document.querySelector('#catPicker .cat-tile')) renderCatPicker();
+
+  // v1.6 renders
+  checkSpendingAlerts(weekSpent, weeklyBudget);
+  renderPaydayCard();
+  if (document.getElementById('paydayInput')) document.getElementById('paydayInput').value = paydayDay || '';
+  if (document.getElementById('subscriptionsList')) renderSubscriptions();
+  if (document.getElementById('billCalendar')) renderBillCalendar();
+  if (document.getElementById('weeklyRecap')) renderWeeklyRecap();
+  if (document.getElementById('goalsList')) renderGoals();
+  if (document.getElementById('assetsList')) renderNetWorth();
+  if (document.getElementById('potsList')) renderPots();
 
   filterTransactions();
   renderCharts();
