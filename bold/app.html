@@ -7,8 +7,35 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.plaid.com/link/v3/stable/link-initialize.js"></script>
   <style>
+    /* ===== v1.7 Theme variables ===== */
+    :root {
+      --bg: #f8f9fa;
+      --bg-card: #ffffff;
+      --bg-soft: #f8f9fa;
+      --text: #2c3e50;
+      --text-muted: #8fa3b8;
+      --border: #e5e7eb;
+      --accent: #667eea;
+      --accent-2: #764ba2;
+      --success: #27ae60;
+      --warn: #f6a93b;
+      --danger: #e74c3c;
+      --shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+    [data-theme="dark"] {
+      --bg: #0f1419;
+      --bg-card: #1a1f2e;
+      --bg-soft: #232a3d;
+      --text: #e5e7eb;
+      --text-muted: #8fa3b8;
+      --border: #2a3142;
+      --accent: #818cf8;
+      --accent-2: #a78bfa;
+      --shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; color: #2c3e50; line-height: 1.6; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; transition: background 0.3s, color 0.3s; }
     header { background: white; border-bottom: 1px solid #e5e7eb; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
     .logo { font-size: 1.2rem; font-weight: 800; color: #667eea; }
     nav { background: white; border-bottom: 1px solid #e5e7eb; padding: 0 24px; display: flex; gap: 32px; }
@@ -74,6 +101,55 @@
     .chart-card { background: white; padding: 24px; border-radius: 12px; border: 1px solid #e5e7eb; margin-bottom: 24px; }
     .chart-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
     .chart-wrapper { position: relative; height: 300px; }
+
+    /* ======= v1.7 UX Polish additions ======= */
+
+    /* Floating Action Button */
+    .fab { position: fixed; bottom: 24px; right: 24px; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; border: none; font-size: 1.8rem; font-weight: 800; cursor: pointer; box-shadow: 0 8px 24px rgba(102,126,234,0.4); z-index: 1000; transition: transform 0.2s, box-shadow 0.2s; }
+    .fab:hover { transform: scale(1.1) rotate(90deg); box-shadow: 0 12px 32px rgba(102,126,234,0.5); }
+    .fab:active { transform: scale(0.95); }
+
+    /* Empty states */
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+    .empty-state .illust { font-size: 4rem; margin-bottom: 12px; opacity: 0.5; }
+    .empty-state .title { font-size: 1.1rem; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    .empty-state .hint { font-size: 0.9rem; }
+
+    /* Animated number */
+    .animated-num { display: inline-block; transition: transform 0.3s; }
+
+    /* Smooth section transitions */
+    .section { opacity: 0; transform: translateY(8px); transition: opacity 0.25s, transform 0.25s; }
+    .section.active { display: block; opacity: 1; transform: translateY(0); }
+
+    /* Sparkline */
+    .sparkline { width: 100%; height: 24px; margin-top: 4px; }
+
+    /* Theme toggle */
+    .theme-toggle { background: none; border: 2px solid var(--border); border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 1.2rem; transition: all 0.2s; padding: 0; }
+    .theme-toggle:hover { border-color: var(--accent); transform: rotate(180deg); }
+
+    /* Confetti canvas */
+    .confetti-canvas { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 9998; }
+
+    /* Dark mode adjustments for cards */
+    [data-theme="dark"] .form-card,
+    [data-theme="dark"] .stat-card,
+    [data-theme="dark"] .chart-card,
+    [data-theme="dark"] .ring-card,
+    [data-theme="dark"] .heatmap-card,
+    [data-theme="dark"] .numpad-display,
+    [data-theme="dark"] .cat-tile,
+    [data-theme="dark"] .chip,
+    [data-theme="dark"] .numpad-key,
+    [data-theme="dark"] header,
+    [data-theme="dark"] .emoji-nav { background: var(--bg-card); border-color: var(--border); color: var(--text); }
+    [data-theme="dark"] .heatmap-day.h0 { background: #2a3142; color: #555; }
+    [data-theme="dark"] .ring-bg { stroke: #2a3142; }
+    [data-theme="dark"] .progress-bar { background: #2a3142; }
+    [data-theme="dark"] .category-item { background: #232a3d; }
+    [data-theme="dark"] .form-group input, [data-theme="dark"] .form-group select { background: var(--bg-soft); color: var(--text); border-color: var(--border); }
+    [data-theme="dark"] .transaction-item:hover { background: var(--bg-soft); }
 
     /* ======= v1.5 Dairygold-style additions ======= */
 
@@ -163,7 +239,10 @@
 
 <header>
   <div class="logo">💰 Noel</div>
-  <button class="btn btn-primary" style="padding: 8px 16px; font-size: 0.9rem;" onclick="switchSection(null, 'daily-log')">Quick Add</button>
+  <div style="display: flex; gap: 12px; align-items: center;">
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme" id="themeToggleBtn">🌙</button>
+    <button class="btn btn-primary" style="padding: 8px 16px; font-size: 0.9rem;" onclick="switchSection(null, 'daily-log')">Quick Add</button>
+  </div>
 </header>
 
 <div class="emoji-nav">
@@ -484,6 +563,11 @@
   </div>
 
 </div>
+
+<!-- FAB - Floating Action Button -->
+<button class="fab" onclick="switchSection(null, 'daily-log')" title="Quick add transaction">+</button>
+
+<!-- Confetti canvas (created on demand) -->
 
 <script>
 let txns = JSON.parse(localStorage.getItem('txns') || '[]');
@@ -1179,7 +1263,7 @@ function renderHero(weekSpent, target) {
   const amt = document.getElementById('heroAmount');
   const sub = document.getElementById('heroSub');
   if (!hero) return;
-  amt.textContent = '€' + weekSpent.toLocaleString('en-IE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  animateNumber(amt, weekSpent, '€');
   const pct = target > 0 ? (weekSpent / target) * 100 : 0;
   hero.classList.remove('warn', 'over');
   if (pct >= 100) { hero.classList.add('over'); sub.textContent = `€${(weekSpent - target).toFixed(2)} over your €${target} target`; }
@@ -1200,6 +1284,8 @@ function renderRings() {
     const color = pct >= 100 ? '#ff5e5e' : pct >= 75 ? '#f6a93b' : '#667eea';
     const offset = circumference - (pct / 100) * circumference;
     const showPct = budget > 0 ? `${pct.toFixed(0)}%` : '—';
+    const sparkValues = categorySpendLast7Days(cat);
+    const sparkline = sparkValues.some(v => v > 0) ? buildSparkline(sparkValues, color) : '';
     return `
       <div class="ring-card" onclick="drillIntoCategory('${cat}')" style="cursor: pointer;" title="Click to see ${cat} transactions">
         <svg class="ring-svg" viewBox="0 0 100 100">
@@ -1209,10 +1295,11 @@ function renderRings() {
             stroke-dasharray="${circumference}"
             stroke-dashoffset="${budget > 0 ? offset : circumference}"></circle>
           <text x="50" y="48" text-anchor="middle" font-size="24">${categoryEmojis[cat] || '📦'}</text>
-          <text x="50" y="72" text-anchor="middle" font-size="14" fill="#2c3e50" font-weight="700">${showPct}</text>
+          <text x="50" y="72" text-anchor="middle" font-size="14" fill="currentColor" font-weight="700">${showPct}</text>
         </svg>
         <div class="ring-name">${cat}</div>
         <div class="ring-amt">€${spent.toFixed(0)}${budget > 0 ? ` / €${budget.toFixed(0)}` : ''}</div>
+        ${sparkline}
       </div>`;
   }).join('');
 }
@@ -1261,6 +1348,110 @@ function renderHeatmap() {
     html += `<div class="heatmap-day ${cls}" title="${tip}" ${click}>${d}</div>`;
   }
   grid.innerHTML = html;
+}
+
+// ====== v1.7 Theme toggle ======
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+  const btn = document.getElementById('themeToggleBtn');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+  // Re-render charts with new theme colors
+  if (typeof renderCharts === 'function') renderCharts();
+}
+// Init theme — saved or system preference
+(function initTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved) { applyTheme(saved); return; }
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(prefersDark ? 'dark' : 'light');
+})();
+
+// ====== v1.7 Animated number counter ======
+function animateNumber(el, target, prefix = '€', duration = 600) {
+  if (!el) return;
+  const start = parseFloat((el.dataset.lastValue || '0'));
+  if (Math.abs(start - target) < 0.01) { el.textContent = prefix + target.toLocaleString('en-IE', {minimumFractionDigits: 2, maximumFractionDigits: 2}); el.dataset.lastValue = target; return; }
+  const startTime = performance.now();
+  function frame(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(1, elapsed / duration);
+    const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+    const value = start + (target - start) * eased;
+    el.textContent = prefix + value.toLocaleString('en-IE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    if (t < 1) requestAnimationFrame(frame);
+    else el.dataset.lastValue = target;
+  }
+  requestAnimationFrame(frame);
+}
+
+// ====== v1.7 Sparklines ======
+function buildSparkline(values, color = '#667eea') {
+  if (!values || values.length < 2) return '';
+  const max = Math.max(...values, 1);
+  const w = 100, h = 24;
+  const step = w / (values.length - 1);
+  const points = values.map((v, i) => `${(i * step).toFixed(1)},${(h - (v / max) * h).toFixed(1)}`).join(' ');
+  return `<svg class="sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${points}"/></svg>`;
+}
+function categorySpendLast7Days(cat) {
+  const today = new Date();
+  const buckets = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const ds = d.toISOString().split('T')[0];
+    const sum = txns.filter(t => t.date === ds && t.category === cat).reduce((s,t) => s + t.amount, 0);
+    buckets.push(sum);
+  }
+  return buckets;
+}
+
+// ====== v1.7 Confetti ======
+function celebrate() {
+  let canvas = document.querySelector('.confetti-canvas');
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.className = 'confetti-canvas';
+    document.body.appendChild(canvas);
+  }
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+  const colors = ['#667eea', '#764ba2', '#f093fb', '#43e97b', '#f6a93b', '#ff5e5e', '#00f2fe'];
+  const particles = [];
+  for (let i = 0; i < 80; i++) {
+    particles.push({
+      x: window.innerWidth / 2 + (Math.random() - 0.5) * 200,
+      y: window.innerHeight / 2,
+      vx: (Math.random() - 0.5) * 12,
+      vy: -Math.random() * 12 - 4,
+      size: Math.random() * 8 + 4,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      rotation: Math.random() * 360,
+      vrot: (Math.random() - 0.5) * 10,
+    });
+  }
+  let frames = 0;
+  function tick() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.4; p.rotation += p.vrot;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation * Math.PI / 180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+      ctx.restore();
+    });
+    frames++;
+    if (frames < 120) requestAnimationFrame(tick);
+    else canvas.remove();
+  }
+  tick();
 }
 
 // ====== v1.6 Subscription detection ======
@@ -1318,7 +1509,7 @@ function renderSubscriptions() {
   if (!list) return;
   const subs = detectSubscriptions();
   if (!subs.length) {
-    list.innerHTML = '<div style="color: #8fa3b8; padding: 20px; text-align: center;">No recurring subscriptions detected yet — import more history or add transactions over time.</div>';
+    list.innerHTML = '<div class="empty-state"><div class="illust">🔁</div><div class="title">No subscriptions detected yet</div><div class="hint">Import more transaction history or wait for patterns to emerge.</div></div>';
     return;
   }
   const total = subs.filter(s => s.cycle === 'Monthly').reduce((s,x) => s + x.avgAmount, 0);
@@ -1351,7 +1542,7 @@ function renderBillCalendar() {
     .sort((a, b) => new Date(a.nextDate) - new Date(b.nextDate));
 
   if (!upcoming.length) {
-    cal.innerHTML = '<div style="color: #8fa3b8; padding: 20px; text-align: center;">No bills detected for the next 30 days.</div>';
+    cal.innerHTML = '<div class="empty-state"><div class="illust">📅</div><div class="title">No bills detected for the next 30 days</div><div class="hint">All clear! Recurring patterns will appear here as you build history.</div></div>';
     return;
   }
   const total = upcoming.reduce((s, x) => s + x.avgAmount, 0);
@@ -1456,9 +1647,15 @@ function addGoal() {
 function updateGoal(id, current) {
   const g = goals.find(x => x.id === id);
   if (!g) return;
+  const wasComplete = g.current >= g.target;
   g.current = parseFloat(current) || 0;
+  const nowComplete = g.current >= g.target;
   save();
   renderGoals();
+  if (!wasComplete && nowComplete) {
+    celebrate();
+    showToast(`🎉 Goal "${g.name}" achieved!`);
+  }
 }
 function deleteGoal(id) {
   if (!confirm('Delete this goal?')) return;
@@ -1469,7 +1666,7 @@ function deleteGoal(id) {
 function renderGoals() {
   const list = document.getElementById('goalsList');
   if (!list) return;
-  if (!goals.length) { list.innerHTML = '<div style="color: #8fa3b8; padding: 12px; text-align: center;">No goals yet. Add one below 👇</div>'; return; }
+  if (!goals.length) { list.innerHTML = '<div class="empty-state"><div class="illust">🎯</div><div class="title">No goals yet</div><div class="hint">Add one below to start saving toward what matters.</div></div>'; return; }
   list.innerHTML = goals.map(g => {
     const pct = Math.min(100, (g.current / g.target) * 100);
     const done = pct >= 100;
@@ -1584,7 +1781,7 @@ function deletePot(id) {
 function renderPots() {
   const list = document.getElementById('potsList');
   if (!list) return;
-  if (!pots.length) { list.innerHTML = '<div style="color:#8fa3b8; padding:12px; text-align:center;">No pots yet. Add one below 👇</div>'; return; }
+  if (!pots.length) { list.innerHTML = '<div class="empty-state"><div class="illust">💰</div><div class="title">No pots yet</div><div class="hint">Pots are virtual sub-accounts — great for "Christmas" or "Rainy day" funds.</div></div>'; return; }
   const total = pots.reduce((s, p) => s + p.balance, 0);
   let html = `<div style="background:#f8f9fa; padding:12px; border-radius:8px; margin-bottom:12px; font-weight:700;">💰 Total in pots: €${total.toFixed(2)}</div>`;
   html += pots.map(p => `
