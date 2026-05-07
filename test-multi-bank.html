@@ -116,19 +116,22 @@ function detectColumns(header) {
   const h = header.map(x => x.toLowerCase().trim());
   const findOne = (patterns) => {
     for (const p of patterns) {
-      const idx = h.findIndex(x => x === p || x.includes(p));
+      const useWordBoundary = p.length <= 4 || /^(in|out|net|gross)$/.test(p);
+      const idx = useWordBoundary
+        ? h.findIndex(x => new RegExp('(^|[^a-z])' + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z])').test(x))
+        : h.findIndex(x => x === p || x.includes(p));
       if (idx !== -1) return idx;
     }
     return -1;
   };
   return {
-    date: findOne(['posted transactions date','posted transaction date','completed date','transaction date','started date','posted date','value date','booking date','date completed','finished on','created on','created','date posted','transaction time','date']),
+    date: findOne(['posted transactions date','posted transaction date','completed date','transaction date','started date','posted date','value date','booking date','date completed','finished on','created on','date posted','transaction time','date']),
     desc: findOne(['description1','description','details','narrative','merchant','counter party','partner name','payee','name','reference','memo','subject','transaction details','particulars']),
-    debit: findOne(['debit amount','debit','withdrawal','withdrawals','money out','paid out','out','spent','expense']),
-    credit: findOne(['credit amount','credit','deposit','deposits','money in','paid in','in','received','income']),
+    debit: findOne(['debit amount','debit','withdrawal','withdrawals','money out','paid out','spent','expense']),
+    credit: findOne(['credit amount','credit','deposit','deposits','money in','paid in','received','income']),
     amount: findOne(['transaction amount','amount (eur)','amount (gbp)','amount (usd)','local amount','amount','value','gross','net']),
-    type: findOne(['type','transaction type','direction','dr/cr']),
-    category: findOne(['category','spending category']),
+    type: findOne(['transaction type','direction','dr/cr','type']),
+    category: findOne(['spending category','category']),
   };
 }
 
