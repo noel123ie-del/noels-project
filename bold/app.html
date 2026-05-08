@@ -1,4 +1,21 @@
 <!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  THRIFT — Personal Finance Tracker
+  Copyright © 2026 Noel Day. All rights reserved.
+
+  This software is licensed, not sold. Unauthorized copying,
+  modification, distribution, or reverse-engineering is strictly
+  prohibited. Each licensed copy is bound to its issued domain
+  and license key. Violators may face legal action.
+
+  Licensed copies activate only on authorized domains:
+  - comfy-donut-f8587d.netlify.app
+  - localhost (for dev)
+
+  Built with care. Do not steal. Build your own — it's more rewarding.
+  ═══════════════════════════════════════════════════════════════
+-->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -895,6 +912,39 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
 
 </div>
 
+<!-- Unauthorized domain screen -->
+<div id="domainLockScreen" style="display: none; position: fixed; inset: 0; background: linear-gradient(135deg, #2c3e50, #c0392b); color: white; z-index: 99999; align-items: center; justify-content: center; padding: 20px;">
+  <div style="max-width: 480px; text-align: center;">
+    <div style="font-size: 4rem;">⛔</div>
+    <h2 style="font-size: 2rem; margin: 16px 0;">Unauthorized copy detected</h2>
+    <p style="color: #ffd5d5; margin-bottom: 16px; line-height: 1.6;">This is a licensed product. It can only run on its authorized domain.</p>
+    <p style="color: #ffd5d5; font-size: 0.9rem; line-height: 1.6;">If you purchased Thrift, please use it from <strong>comfy-donut-f8587d.netlify.app</strong>. If you found this elsewhere, the copy is unauthorized.</p>
+    <p style="margin-top: 24px; font-size: 0.85rem; opacity: 0.8;">© 2026 Noel Day. All rights reserved.</p>
+  </div>
+</div>
+
+<!-- Terms of Service first-launch modal -->
+<div id="tosModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 99997; align-items: center; justify-content: center; padding: 20px;">
+  <div style="max-width: 560px; max-height: 85vh; overflow-y: auto; background: var(--bg-card); color: var(--text); border-radius: 16px; padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
+    <h2 style="margin-bottom: 16px;">📜 Terms of Service</h2>
+    <p style="margin-bottom: 12px; line-height: 1.6;">Welcome to <strong>Thrift</strong>. By using this app you agree to these terms:</p>
+    <ol style="margin: 12px 0 16px 24px; line-height: 1.8;">
+      <li><strong>License:</strong> Your access is granted via a license code. The code expires; you must renew to continue.</li>
+      <li><strong>No copying:</strong> You may not copy, modify, redistribute, reverse-engineer, or sell this software or any part of it.</li>
+      <li><strong>Your data:</strong> Stored in your browser only (or your own Firebase if you enable cloud sync). The publisher does not access it.</li>
+      <li><strong>Optional API key:</strong> If you use Smart AI, your Anthropic key is stored locally and only sent to api.anthropic.com.</li>
+      <li><strong>No warranty:</strong> Provided as-is for personal use. Not financial advice. Verify all calculations.</li>
+      <li><strong>Liability:</strong> The publisher is not liable for any financial loss, missed bills, or decisions made using this app.</li>
+      <li><strong>Termination:</strong> Access may be revoked at any time at the publisher's discretion (e.g. via the kill-switch).</li>
+    </ol>
+    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">© 2026 Noel Day. All rights reserved.</p>
+    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+      <button onclick="declineToS()" style="padding: 10px 18px; background: transparent; color: var(--text-muted); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;">Decline</button>
+      <button onclick="acceptToS()" class="btn btn-primary" style="padding: 10px 22px;">I Accept</button>
+    </div>
+  </div>
+</div>
+
 <!-- Remote shutdown lock screen (kill-switch) -->
 <div id="killSwitchScreen" style="display: none; position: fixed; inset: 0; background: linear-gradient(135deg, #c0392b, #2c3e50); color: white; z-index: 99998; align-items: center; justify-content: center; padding: 20px;">
   <div style="max-width: 480px; text-align: center;">
@@ -1256,6 +1306,84 @@ save = function() {
   _origSave();
   if (syncEnabled && !partnerMode && firebaseProject && shareCode) scheduleSync();
 };
+
+// ===== v1.19 Anti-copy: Domain lock =====
+const ALLOWED_DOMAINS = [
+  'comfy-donut-f8587d.netlify.app',
+  'localhost',
+  '127.0.0.1',
+  '',  // file:// has empty hostname — allow for offline use
+];
+function checkDomainLock() {
+  const host = location.hostname;
+  // Allow Netlify preview/branch deploys (e.g. deploy-preview-X--site.netlify.app)
+  if (host.endsWith('.netlify.app') && host.includes('comfy-donut-f8587d')) return true;
+  if (ALLOWED_DOMAINS.includes(host)) return true;
+  // Unauthorized domain
+  const lock = document.getElementById('domainLockScreen');
+  if (lock) lock.style.display = 'flex';
+  // Wipe useful globals as deterrent
+  setTimeout(() => {
+    try {
+      txns = []; income = [];
+      document.body.innerHTML = lock?.outerHTML || '<h1>⛔ Unauthorized</h1>';
+    } catch (e) {}
+  }, 100);
+  return false;
+}
+
+// ===== v1.19 Anti-copy: Terms of Service =====
+function checkToS() {
+  const accepted = localStorage.getItem('tosAccepted');
+  if (accepted) return true;
+  const modal = document.getElementById('tosModal');
+  if (modal) modal.style.display = 'flex';
+  return false;
+}
+function acceptToS() {
+  localStorage.setItem('tosAccepted', new Date().toISOString());
+  const modal = document.getElementById('tosModal');
+  if (modal) modal.style.display = 'none';
+  showToast('✅ Welcome to Thrift');
+}
+function declineToS() {
+  // Redirect away
+  document.body.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; height:100vh; flex-direction:column; gap:16px; text-align:center; padding:20px; font-family:sans-serif;"><h1>👋 Goodbye</h1><p>You must accept the Terms of Service to use Thrift.</p></div>';
+}
+
+// ===== v1.19 Anti-copy: Right-click + DevTools deterrent =====
+function installAntiCopyDeterrents() {
+  // Disable right-click on the app body (still allow on inputs)
+  document.addEventListener('contextmenu', (e) => {
+    if (e.target.matches('input, textarea')) return; // allow on form fields
+    e.preventDefault();
+  });
+  // Block common copy shortcuts on the app shell (allow on inputs)
+  document.addEventListener('keydown', (e) => {
+    const onInput = e.target.matches('input, textarea, [contenteditable]');
+    if (onInput) return;
+    // Disable Ctrl+S (save page), Ctrl+U (view source) — DevTools (F12) we leave alone
+    // because blocking it pisses off honest users without stopping anyone
+    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'u')) {
+      e.preventDefault();
+      showToast('🔒 Disabled');
+    }
+  });
+  // Friendly console message warning would-be copyists
+  console.log('%c🔒 Thrift — Licensed Software', 'color:#667eea; font-size:24px; font-weight:bold;');
+  console.log('%c© 2026 Noel Day. Unauthorized copying prohibited.', 'color:#e74c3c; font-size:14px;');
+  console.log('%cIf someone told you to paste code here, STOP — it could compromise your data.', 'color:#f6a93b; font-size:14px;');
+}
+
+// ===== v1.19 Anti-copy: Footer watermark =====
+function addWatermark() {
+  if (document.getElementById('thriftWatermark')) return;
+  const wm = document.createElement('div');
+  wm.id = 'thriftWatermark';
+  wm.style.cssText = 'position:fixed; bottom:6px; left:50%; transform:translateX(-50%); font-size:0.65rem; color:rgba(128,128,128,0.5); pointer-events:none; user-select:none; z-index:1; font-family:sans-serif;';
+  wm.textContent = '© 2026 Thrift by Noel Day · Licensed';
+  document.body.appendChild(wm);
+}
 
 // v1.18 Remote kill-switch / status check
 const STATUS_URL = '/status.json';  // served from same origin (Netlify)
@@ -4828,10 +4956,16 @@ function render() {
   }
 }
 
-checkLicenseGate(); // v1.16 — show lock if expired
-checkRemoteStatus(); // v1.18 — remote kill-switch
-render();
-initPlaidLink();
+// v1.19 anti-copy gates run FIRST
+if (checkDomainLock()) {
+  installAntiCopyDeterrents();
+  addWatermark();
+  checkToS(); // shows ToS modal if first launch (non-blocking — render still proceeds)
+  checkLicenseGate(); // v1.16 — show lock if expired
+  checkRemoteStatus(); // v1.18 — remote kill-switch
+  render();
+  initPlaidLink();
+}
 </script>
 
 </body>
