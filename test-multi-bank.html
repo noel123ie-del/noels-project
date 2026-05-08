@@ -49,26 +49,26 @@ function detectDelimiter(lines) {
 }
 
 function parseAnyDate(s) {
+  if (s === null || s === undefined) return null;
+  s = String(s).replace(/"/g, '').trim();
   if (!s) return null;
-  s = s.replace(/"/g, '').trim();
-  s = s.split(/[T ]/)[0];
-  let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/);
+  let m = s.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
   if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
-  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  m = s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
   if (m) {
     const a = parseInt(m[1]), b = parseInt(m[2]);
     if (a > 12) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
     if (b > 12) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
     return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
   }
-  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})$/);
+  m = s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})(?:\D|$)/);
   if (m) {
     const yy = parseInt(m[3]);
     const yyyy = yy < 50 ? 2000 + yy : 1900 + yy;
     return `${yyyy}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
   }
   const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
-  m = s.match(/^(\d{1,2})[\s\-]+([A-Za-z]{3,})[\s\-]+(\d{2,4})$/);
+  m = s.match(/(\d{1,2})[\s\-]+([A-Za-z]{3,})[\s\-]+(\d{2,4})/);
   if (m) {
     const mn = months[m[2].toLowerCase().slice(0,3)];
     if (mn) {
@@ -77,7 +77,7 @@ function parseAnyDate(s) {
       return `${y}-${String(mn).padStart(2,'0')}-${m[1].padStart(2,'0')}`;
     }
   }
-  m = s.match(/^([A-Za-z]{3,})\s+(\d{1,2}),?\s+(\d{2,4})$/);
+  m = s.match(/([A-Za-z]{3,})\s+(\d{1,2}),?\s+(\d{2,4})/);
   if (m) {
     const mn = months[m[1].toLowerCase().slice(0,3)];
     if (mn) {
@@ -364,6 +364,14 @@ Date,Description,Debit,Credit,Balance
 5 May 2026,Tesco,-45.30
 6 May 2026,Salary,2500.00`,
     expectMin: 2
+  },
+  {
+    name: 'AIB Credit Card (HH:MM, DD/MM/YYYY format)',
+    csv: `Masked Card Number, Transaction date/time, Processed, Description, Paid out, Paid in, Posted Currency, Transaction Type, Category
+4402 **** **** 0621,"12:10, 06/05/2026","07/05/2026","MACE MAXOL","14.75","","EUR","Purchase","Shopping"
+4402 **** **** 0621,"16:03, 06/05/2026","07/05/2026","AMAZON.IE","6.99","","EUR","Purchase","Leisure & Entertainment"
+4402 **** **** 0621,"00:00, 06/05/2026","06/05/2026","DIRECT DEBIT - THANK YOU","","45.13","EUR","Bill Payment",""`,
+    expectMin: 3
   },
   {
     name: 'AIB short format (7 cols, 2-digit year)',
