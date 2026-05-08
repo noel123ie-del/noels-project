@@ -719,6 +719,70 @@
     </div>
 
     <div class="form-card">
+      <h3>👥 Share with Partner / Family (Cloud Sync)</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Auto-sync your data to a free Firebase project so your partner sees it live on their device.</p>
+
+      <div id="syncStatus" style="margin-bottom: 12px;"></div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Firebase project ID</label>
+          <input type="text" id="firebaseProject" placeholder="e.g. my-thrift-app-12345" oninput="saveSyncConfig()">
+        </div>
+        <div class="form-group">
+          <label>Share code (any phrase)</label>
+          <input type="text" id="shareCode" placeholder="e.g. noel-and-anna-2026" oninput="saveSyncConfig()">
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px;">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="syncEnabled" onchange="saveSyncConfig()">
+          <span>📤 Sync my data to cloud (you = primary user)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="partnerMode" onchange="togglePartnerMode()">
+          <span>👁️ View partner's data (read-only, you = viewer)</span>
+        </label>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+        <button class="btn btn-primary" onclick="syncNow()" style="flex:1;">📤 Sync Now</button>
+        <button class="btn btn-primary" onclick="fetchPartnerData()" style="flex:1; background: var(--accent-2);">📥 Fetch Partner</button>
+      </div>
+
+      <details style="margin-top: 16px;">
+        <summary style="cursor: pointer; font-weight: 700; color: var(--accent); font-size: 0.85rem;">🛠️ Setup Instructions (one-time, ~10 min)</summary>
+        <div style="background: var(--bg-soft); padding: 14px; border-radius: 8px; margin-top: 8px; font-size: 0.85rem; line-height: 1.7;">
+          <strong>Step 1 — Create free Firebase project (5 min):</strong><br>
+          • Go to <a href="https://console.firebase.google.com/" target="_blank">console.firebase.google.com</a><br>
+          • Click "Add project" → name it (e.g. "thrift-sync") → continue → Create<br>
+          • Disable Google Analytics (not needed)<br><br>
+
+          <strong>Step 2 — Enable Firestore Database (3 min):</strong><br>
+          • Left menu → Build → Firestore Database → Create database<br>
+          • Choose region (europe-west1 for Ireland)<br>
+          • Pick "Start in <strong>test mode</strong>" — gives 30 days of open access (good enough for personal use)<br>
+          • Click Enable<br><br>
+
+          <strong>Step 3 — Get your project ID (30 sec):</strong><br>
+          • Top-left gear icon → Project settings<br>
+          • Copy "Project ID" (looks like <code>thrift-sync-12345</code>)<br>
+          • Paste it in the field above<br><br>
+
+          <strong>Step 4 — Set a share code:</strong><br>
+          • Pick any phrase (e.g. "noel-anna-2026")<br>
+          • Tell your partner the same code<br>
+          • Tick "📤 Sync my data" on YOUR device<br>
+          • Tick "👁️ View partner's data" on HER device<br>
+          • Done! Your data appears on her screen within seconds.
+        </div>
+      </details>
+
+      <p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 10px;">⚠️ "Test mode" Firestore expires in 30 days — you'll need to switch to "production mode" with simple rules. Free tier handles families easily (50k reads/20k writes per day).</p>
+    </div>
+
+    <div class="form-card">
       <h3>🚨 Emergency Kill-Switch (Admin)</h3>
       <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Shut down all users instantly when there's a problem. Editing <code>status.json</code> in the repo updates every user within 5 minutes.</p>
       <div style="background: var(--bg-soft); padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.8rem; line-height: 1.7; overflow-x: auto;">
@@ -1003,6 +1067,195 @@ async function answerQuestionSmart(q) {
   }
   return rulesAnswer;
 }
+
+// ===== v1.18 Cloud Sync (Firebase Firestore REST API) =====
+let firebaseProject = localStorage.getItem('firebaseProject') || '';
+let shareCode = localStorage.getItem('shareCode') || '';
+let syncEnabled = localStorage.getItem('syncEnabled') === 'true';
+let partnerMode = localStorage.getItem('partnerMode') === 'true';
+let _partnerData = null; // when in partner mode, holds fetched partner snapshot
+let _syncTimer = null;
+let _lastSyncedAt = localStorage.getItem('lastSyncedAt') || '';
+
+function saveSyncConfig() {
+  firebaseProject = (document.getElementById('firebaseProject')?.value || '').trim();
+  shareCode = (document.getElementById('shareCode')?.value || '').trim();
+  syncEnabled = !!document.getElementById('syncEnabled')?.checked;
+  localStorage.setItem('firebaseProject', firebaseProject);
+  localStorage.setItem('shareCode', shareCode);
+  localStorage.setItem('syncEnabled', syncEnabled ? 'true' : 'false');
+  if (syncEnabled && firebaseProject && shareCode) scheduleSync();
+  renderSyncStatus();
+}
+
+function firestoreDocURL() {
+  if (!firebaseProject || !shareCode) return null;
+  // Sanitize share code for URL safety
+  const code = shareCode.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  return `https://firestore.googleapis.com/v1/projects/${firebaseProject}/databases/(default)/documents/thrift/${code}`;
+}
+
+async function syncNow() {
+  const url = firestoreDocURL();
+  if (!url) { showToast('⚠️ Set Firebase project + share code first'); return; }
+  try {
+    const data = {
+      txns, income, catBudgets, weeklyBudget,
+      goals, assets, liabilities, pots, paydayDay,
+      userCategoryRules, accountTypes, contextBudgets,
+      netWorthHistory, baseCurrency,
+      _syncedAt: new Date().toISOString(),
+      _syncedBy: 'primary',
+    };
+    const body = {
+      fields: {
+        snapshot: { stringValue: JSON.stringify(data).slice(0, 1000000) }, // 1MB safe limit
+        updatedAt: { timestampValue: new Date().toISOString() },
+      },
+    };
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('Sync failed:', err);
+      showToast('⚠️ Sync failed — check Firebase rules');
+      return;
+    }
+    _lastSyncedAt = new Date().toISOString();
+    localStorage.setItem('lastSyncedAt', _lastSyncedAt);
+    showToast('☁️ Synced to cloud');
+    renderSyncStatus();
+  } catch (e) {
+    console.error(e);
+    showToast('⚠️ Sync error: ' + e.message);
+  }
+}
+
+function scheduleSync() {
+  if (_syncTimer) clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(() => syncNow(), 2000); // debounce 2s
+}
+
+async function fetchPartnerData() {
+  const url = firestoreDocURL();
+  if (!url) { showToast('⚠️ Set Firebase project + share code first'); return; }
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      if (res.status === 404) showToast('⚠️ No data yet — has your partner synced?');
+      else showToast('⚠️ Fetch failed: ' + res.status);
+      return;
+    }
+    const result = await res.json();
+    const snapshotStr = result.fields?.snapshot?.stringValue;
+    if (!snapshotStr) { showToast('⚠️ Empty snapshot'); return; }
+    _partnerData = JSON.parse(snapshotStr);
+    if (partnerMode) applyPartnerView();
+    showToast(`📥 Fetched partner data (${_partnerData.txns?.length || 0} txns)`);
+    renderSyncStatus();
+  } catch (e) {
+    console.error(e);
+    showToast('⚠️ Fetch error: ' + e.message);
+  }
+}
+
+function togglePartnerMode() {
+  partnerMode = !!document.getElementById('partnerMode')?.checked;
+  localStorage.setItem('partnerMode', partnerMode ? 'true' : 'false');
+  if (partnerMode) {
+    fetchPartnerData().then(() => applyPartnerView());
+  } else {
+    exitPartnerView();
+  }
+}
+
+function applyPartnerView() {
+  if (!_partnerData) return;
+  // Backup own data into a separate slot
+  localStorage.setItem('_ownData', JSON.stringify({
+    txns, income, catBudgets, weeklyBudget, goals, assets, liabilities, pots,
+    paydayDay, userCategoryRules, accountTypes, contextBudgets, netWorthHistory, baseCurrency,
+  }));
+  // Replace with partner data
+  txns = _partnerData.txns || [];
+  income = _partnerData.income || [];
+  catBudgets = _partnerData.catBudgets || {};
+  weeklyBudget = _partnerData.weeklyBudget || 1725;
+  goals = _partnerData.goals || [];
+  assets = _partnerData.assets || [];
+  liabilities = _partnerData.liabilities || [];
+  pots = _partnerData.pots || [];
+  paydayDay = _partnerData.paydayDay || null;
+  userCategoryRules = _partnerData.userCategoryRules || {};
+  accountTypes = _partnerData.accountTypes || defaultAccountTypes;
+  contextBudgets = _partnerData.contextBudgets || { personal: 1725, business: 0 };
+  netWorthHistory = _partnerData.netWorthHistory || [];
+  // Show partner banner
+  showPartnerBanner();
+  render();
+}
+
+function exitPartnerView() {
+  const own = localStorage.getItem('_ownData');
+  if (own) {
+    const d = JSON.parse(own);
+    txns = d.txns; income = d.income; catBudgets = d.catBudgets; weeklyBudget = d.weeklyBudget;
+    goals = d.goals; assets = d.assets; liabilities = d.liabilities; pots = d.pots;
+    paydayDay = d.paydayDay; userCategoryRules = d.userCategoryRules;
+    accountTypes = d.accountTypes; contextBudgets = d.contextBudgets;
+    netWorthHistory = d.netWorthHistory; baseCurrency = d.baseCurrency;
+    localStorage.removeItem('_ownData');
+  }
+  hidePartnerBanner();
+  render();
+  showToast('✅ Back to your own data');
+}
+
+function showPartnerBanner() {
+  let banner = document.getElementById('partnerBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'partnerBanner';
+    banner.style.cssText = 'position:fixed; top:0; left:0; right:0; background:linear-gradient(135deg, #f6a93b, #e07a00); color:white; padding:8px 16px; text-align:center; font-weight:700; z-index:9996; font-size:0.85rem; display:flex; justify-content:center; align-items:center; gap:12px;';
+    document.body.prepend(banner);
+  }
+  banner.innerHTML = `👁️ Viewing partner's data (read-only) <button onclick="document.getElementById('partnerMode').checked=false;togglePartnerMode()" style="background:white; color:#e07a00; border:none; padding:4px 10px; border-radius:6px; cursor:pointer; font-weight:700;">Exit</button>`;
+  document.body.style.paddingTop = '40px';
+}
+function hidePartnerBanner() {
+  const banner = document.getElementById('partnerBanner');
+  if (banner) banner.remove();
+  document.body.style.paddingTop = '';
+}
+
+function renderSyncStatus() {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  if (!firebaseProject || !shareCode) {
+    el.innerHTML = '<div style="background: var(--bg-soft); padding: 10px; border-radius: 8px; font-size: 0.85rem; color: var(--text-muted);">⚪ Not configured — fill in fields below</div>';
+    return;
+  }
+  if (partnerMode) {
+    el.innerHTML = '<div style="background: #f6a93b; color: white; padding: 10px; border-radius: 8px; font-weight: 700;">👁️ Partner View active — showing their data</div>';
+    return;
+  }
+  if (syncEnabled) {
+    const when = _lastSyncedAt ? new Date(_lastSyncedAt).toLocaleString() : 'never';
+    el.innerHTML = `<div style="background: #27ae60; color: white; padding: 10px; border-radius: 8px; font-weight: 700;">☁️ Sync ON — last sync: ${when}</div>`;
+  } else {
+    el.innerHTML = '<div style="background: var(--bg-soft); padding: 10px; border-radius: 8px; font-size: 0.85rem;">⚪ Configured but not auto-syncing — tick "Sync my data" to enable</div>';
+  }
+}
+
+// Hook auto-sync into save() — wrap it
+const _origSave = save;
+save = function() {
+  _origSave();
+  if (syncEnabled && !partnerMode && firebaseProject && shareCode) scheduleSync();
+};
 
 // v1.18 Remote kill-switch / status check
 const STATUS_URL = '/status.json';  // served from same origin (Netlify)
@@ -4540,6 +4793,16 @@ function render() {
   if (document.getElementById('accountTypeList')) renderAccountTypeList();
   // v1.16 license status
   if (document.getElementById('licenseStatus')) renderLicenseStatus();
+  // v1.18 sync UI sync
+  const fp = document.getElementById('firebaseProject');
+  const sc = document.getElementById('shareCode');
+  const se = document.getElementById('syncEnabled');
+  const pm = document.getElementById('partnerMode');
+  if (fp && document.activeElement !== fp) fp.value = firebaseProject;
+  if (sc && document.activeElement !== sc) sc.value = shareCode;
+  if (se) se.checked = syncEnabled;
+  if (pm) pm.checked = partnerMode;
+  if (document.getElementById('syncStatus')) renderSyncStatus();
   // v1.17 sync API config inputs
   const aiKeyInput = document.getElementById('anthropicKey');
   const aiModelInput = document.getElementById('anthropicModel');
