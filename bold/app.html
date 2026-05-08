@@ -21,6 +21,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Noel - Budget Tracker</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#667eea">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Thrift">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.plaid.com/link/v3/stable/link-initialize.js"></script>
   <style>
@@ -319,6 +324,8 @@
       <option value="personal">🏠 Personal</option>
       <option value="business">🏢 Business</option>
     </select>
+    <button class="theme-toggle" id="installBtn" onclick="installPWA()" title="Install app" style="display:none;">📲</button>
+    <button class="theme-toggle" onclick="startTour()" title="Take a tour" style="font-size:1.1rem;">❓</button>
     <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme" id="themeToggleBtn">🌙</button>
     <button class="btn btn-primary" style="padding: 8px 16px; font-size: 0.9rem;" onclick="switchSection(null, 'daily-log')">Quick Add</button>
   </div>
@@ -992,6 +999,21 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
 <!-- Service banner (non-blocking warnings) -->
 <div id="serviceBanner" style="display: none; position: fixed; top: 0; left: 0; right: 0; background: #f6a93b; color: white; padding: 10px 16px; text-align: center; font-weight: 700; z-index: 9997; font-size: 0.9rem;"></div>
 
+<!-- Onboarding tour overlay -->
+<div id="tourOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:99996; align-items:center; justify-content:center; padding:20px;">
+  <div style="max-width: 480px; background: var(--bg-card); color: var(--text); border-radius: 16px; padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
+    <div id="tourContent"></div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px;">
+      <button onclick="skipTour()" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">Skip tour</button>
+      <div style="display:flex; gap:8px;">
+        <button id="tourPrev" onclick="tourStep(-1)" class="btn btn-primary" style="background:var(--bg-soft); color:var(--text); padding:8px 16px;">Back</button>
+        <button id="tourNext" onclick="tourStep(1)" class="btn btn-primary" style="padding:8px 16px;">Next →</button>
+      </div>
+    </div>
+    <div id="tourProgress" style="text-align:center; margin-top:12px; font-size:0.8rem; color:var(--text-muted);"></div>
+  </div>
+</div>
+
 <!-- Subscription expired lock screen -->
 <div id="lockScreen" style="display: none; position: fixed; inset: 0; background: linear-gradient(135deg, #0f1419, #2a3142); color: white; z-index: 99999; align-items: center; justify-content: center; padding: 20px;">
   <div style="max-width: 480px; text-align: center;">
@@ -1339,6 +1361,78 @@ save = function() {
   _origSave();
   if (syncEnabled && !partnerMode && firebaseProject && shareCode) scheduleSync();
 };
+
+// ===== v1.21 PWA Install =====
+let _deferredPwaPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _deferredPwaPrompt = e;
+  const btn = document.getElementById('installBtn');
+  if (btn) btn.style.display = '';
+});
+async function installPWA() {
+  if (!_deferredPwaPrompt) {
+    showToast('💡 Use your browser menu to install (Chrome: ⋮ → Install Thrift, iOS: Share → Add to Home Screen)');
+    return;
+  }
+  _deferredPwaPrompt.prompt();
+  const { outcome } = await _deferredPwaPrompt.userChoice;
+  if (outcome === 'accepted') showToast('🎉 Installed! Find Thrift on your home screen');
+  _deferredPwaPrompt = null;
+  document.getElementById('installBtn').style.display = 'none';
+}
+// Register service worker for offline support
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((e) => console.warn('SW registration failed:', e));
+  });
+}
+
+// ===== v1.21 Onboarding Tour =====
+const tourSteps = [
+  { title: '👋 Welcome to Thrift', body: 'Track your spending in seconds. Let me show you the key features in 60 seconds.' },
+  { title: '🏠 Home', body: 'Your dashboard. Big number = this week\'s spending. Below: category rings, calendar heatmap, charts. Click any ring to drill in.' },
+  { title: '💳 Spend', body: 'Tap a number → tap a category emoji. 3 taps = transaction logged. Or tap the floating + button anywhere.' },
+  { title: '💡 Insights', body: 'Auto-detected subscriptions, upcoming bills, smart suggestions, cash-flow forecast, achievements. Plus chat with the AI.' },
+  { title: '🎯 Goals', body: 'Net worth, savings goals (with confetti when you hit them!), assets, liabilities, pots.' },
+  { title: '📊 Stats', body: 'Every transaction with search, filters, sorting, CSV export.' },
+  { title: '⚙️ Settings', body: 'Import bank CSVs, link accounts, set budgets, switch Personal ↔ Business, share with partner, customise branding.' },
+  { title: '🤖 Ask Thrift (chat bubble)', body: 'Bottom-right corner — chat any question about your money. Type or speak. With Smart AI key, it gets even smarter.' },
+  { title: '🎉 You\'re ready!', body: 'Try "Load Sample Data" in Settings to test, or import your bank CSV. Tap ❓ in header anytime to replay this tour.' },
+];
+let _tourIdx = 0;
+function startTour() {
+  _tourIdx = 0;
+  document.getElementById('tourOverlay').style.display = 'flex';
+  showTourStep();
+}
+function showTourStep() {
+  const step = tourSteps[_tourIdx];
+  if (!step) return;
+  document.getElementById('tourContent').innerHTML = `<h2 style="margin-bottom:12px;">${step.title}</h2><p style="line-height:1.7; color:var(--text);">${step.body}</p>`;
+  document.getElementById('tourProgress').textContent = `${_tourIdx + 1} of ${tourSteps.length}`;
+  document.getElementById('tourPrev').style.visibility = _tourIdx === 0 ? 'hidden' : 'visible';
+  document.getElementById('tourNext').textContent = _tourIdx === tourSteps.length - 1 ? '✅ Done' : 'Next →';
+}
+function tourStep(delta) {
+  _tourIdx += delta;
+  if (_tourIdx >= tourSteps.length) {
+    skipTour();
+    localStorage.setItem('tourCompleted', 'true');
+    return;
+  }
+  if (_tourIdx < 0) _tourIdx = 0;
+  showTourStep();
+}
+function skipTour() {
+  document.getElementById('tourOverlay').style.display = 'none';
+  localStorage.setItem('tourSkipped', 'true');
+}
+function autoStartTourIfNew() {
+  if (!localStorage.getItem('tourCompleted') && !localStorage.getItem('tourSkipped') && txns.length === 0) {
+    setTimeout(() => startTour(), 1200); // delay so user sees app first
+  }
+}
 
 // ===== v1.20 Branding =====
 let brandName = localStorage.getItem('brandName') || 'Noel';
@@ -5194,6 +5288,7 @@ if (checkDomainLock()) {
   checkRemoteStatus(); // v1.18 — remote kill-switch
   render();
   initPlaidLink();
+  autoStartTourIfNew(); // v1.21 first-launch onboarding
 }
 </script>
 
