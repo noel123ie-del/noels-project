@@ -718,6 +718,24 @@
       <div id="voiceTranscript" style="margin-top: 10px; color: var(--text-muted); font-size: 0.9rem;"></div>
     </div>
 
+    <div class="form-card">
+      <h3>🚨 Emergency Kill-Switch (Admin)</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Shut down all users instantly when there's a problem. Editing <code>status.json</code> in the repo updates every user within 5 minutes.</p>
+      <div style="background: var(--bg-soft); padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.8rem; line-height: 1.7; overflow-x: auto;">
+<strong>To shut everyone down:</strong><br>
+1. Edit <code>status.json</code> (in repo or Netlify)<br>
+2. Set <code>"active": false</code><br>
+3. Set <code>"message": "Reason..."</code><br>
+4. Commit + push (Netlify auto-deploys ~30s)<br>
+5. All users locked within 5 min (or instantly on next reload)<br>
+<br>
+<strong>Banner-only warning:</strong><br>
+Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br>
+<br>
+<strong>To restore:</strong> set <code>"active": true</code> and <code>"banner": ""</code>.
+      </div>
+    </div>
+
     <div class="form-card" id="licenseCard">
       <h3>🔐 Subscription / License</h3>
       <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Your access expires on the date below. Enter a renewal code to extend.</p>
@@ -813,6 +831,20 @@
 
 </div>
 
+<!-- Remote shutdown lock screen (kill-switch) -->
+<div id="killSwitchScreen" style="display: none; position: fixed; inset: 0; background: linear-gradient(135deg, #c0392b, #2c3e50); color: white; z-index: 99998; align-items: center; justify-content: center; padding: 20px;">
+  <div style="max-width: 480px; text-align: center;">
+    <div style="font-size: 4rem;">🛠️</div>
+    <h2 style="font-size: 2rem; margin: 16px 0;">Service unavailable</h2>
+    <p id="killSwitchMessage" style="color: #ffd5d5; margin-bottom: 24px; line-height: 1.6;">Thrift is temporarily down for maintenance. Please check back shortly.</p>
+    <p style="font-size: 0.85rem; opacity: 0.7;">Your data is safe — saved locally, won't be lost.</p>
+    <button onclick="recheckKillSwitch()" style="margin-top: 20px; padding: 10px 24px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4); border-radius: 8px; cursor: pointer; font-weight: 700;">🔄 Retry</button>
+  </div>
+</div>
+
+<!-- Service banner (non-blocking warnings) -->
+<div id="serviceBanner" style="display: none; position: fixed; top: 0; left: 0; right: 0; background: #f6a93b; color: white; padding: 10px 16px; text-align: center; font-weight: 700; z-index: 9997; font-size: 0.9rem;"></div>
+
 <!-- Subscription expired lock screen -->
 <div id="lockScreen" style="display: none; position: fixed; inset: 0; background: linear-gradient(135deg, #0f1419, #2a3142); color: white; z-index: 99999; align-items: center; justify-content: center; padding: 20px;">
   <div style="max-width: 480px; text-align: center;">
@@ -883,6 +915,154 @@ let voiceListening = false;
 
 // v1.10 data
 let netWorthHistory = JSON.parse(localStorage.getItem('netWorthHistory') || '[]');
+
+// v1.17 Claude API config
+let anthropicKey = localStorage.getItem('anthropicKey') || '';
+let anthropicModel = localStorage.getItem('anthropicModel') || 'claude-haiku-4-5-20251001';
+function saveAIConfig() {
+  const k = document.getElementById('anthropicKey')?.value || '';
+  const m = document.getElementById('anthropicModel')?.value || 'claude-haiku-4-5-20251001';
+  anthropicKey = k.trim();
+  anthropicModel = m;
+  localStorage.setItem('anthropicKey', anthropicKey);
+  localStorage.setItem('anthropicModel', anthropicModel);
+}
+
+function buildAIContext() {
+  // Compact summary of user's data for the AI to reference
+  const wr = getWeekRange();
+  const monthStart = new Date().toISOString().slice(0, 7) + '-01';
+  const recent = txns.slice(-50).map(t => `${t.date}|${t.account}|${t.category}|${t.desc}|${t.amount}`).join('\n');
+  const recentInc = income.slice(-20).map(i => `${i.date}|${i.account}|${i.desc}|${i.amount}`).join('\n');
+  const subs = detectSubscriptions().slice(0, 10).map(s => `${s.desc}|${s.cycle}|${s.avgAmount.toFixed(2)}`).join('\n');
+  const totalAssets = assets.reduce((s, a) => s + a.value, 0);
+  const totalLiab = liabilities.reduce((s, l) => s + l.value, 0);
+  const goalsList = goals.map(g => `${g.name}: ${g.current}/${g.target}`).join('; ');
+  const today = new Date().toISOString().split('T')[0];
+  return `Today: ${today}. Week: ${wr.start} to ${wr.end}. Currency: ${baseCurrency}. Active context: ${activeContext}.
+Weekly budget: ${weeklyBudget}. Personal budget: ${contextBudgets.personal}. Business budget: ${contextBudgets.business}.
+Categories: ${categories.join(', ')}. Accounts: ${accounts.join(', ')}.
+Total transactions: ${txns.length}. Total income entries: ${income.length}.
+Net worth: assets ${totalAssets} - liabilities ${totalLiab} = ${totalAssets - totalLiab}.
+Goals: ${goalsList || 'none'}.
+
+Last 50 transactions (date|account|category|desc|amount):
+${recent}
+
+Last 20 income entries (date|account|desc|amount):
+${recentInc}
+
+Detected subscriptions (desc|cycle|avg):
+${subs}`;
+}
+
+async function callClaudeAPI(question) {
+  if (!anthropicKey) return null;
+  try {
+    const sysPrompt = `You are Thrift, a friendly Irish personal-finance assistant. Answer questions about the user's spending data concisely (2-4 sentences usually). Use ${baseCurrency === 'EUR' ? '€' : baseCurrency === 'GBP' ? '£' : '$'} for amounts. The user's data follows. Use it as ground truth — if a question can't be answered from this data, say so honestly.
+
+${buildAIContext()}`;
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: anthropicModel,
+        max_tokens: 512,
+        system: sysPrompt,
+        messages: [{ role: 'user', content: question }],
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('Claude API error', err);
+      return `⚠️ API error: ${res.status}. Check your key in Settings.`;
+    }
+    const data = await res.json();
+    return data.content?.[0]?.text || '(empty response)';
+  } catch (e) {
+    console.error(e);
+    return `⚠️ Network error: ${e.message}`;
+  }
+}
+
+// Wraps answerQuestion: if rules return generic fallback AND API key is set, escalate to Claude
+async function answerQuestionSmart(q) {
+  const rulesAnswer = answerQuestion(q);
+  // If rules answered well, return immediately
+  const isFallback = /^(I'm not sure how to answer|Sorry, I didn't understand)/.test(rulesAnswer);
+  if (!isFallback) return rulesAnswer;
+  // Escalate to Claude API if available
+  if (anthropicKey) {
+    const aiAnswer = await callClaudeAPI(q);
+    if (aiAnswer) return aiAnswer;
+  }
+  return rulesAnswer;
+}
+
+// v1.18 Remote kill-switch / status check
+const STATUS_URL = '/status.json';  // served from same origin (Netlify)
+const STATUS_FALLBACK_URL = 'https://comfy-donut-f8587d.netlify.app/status.json';
+let lastStatusCheck = 0;
+
+async function checkRemoteStatus() {
+  try {
+    // Use both relative and absolute URL — relative works when served from same origin,
+    // absolute fallback works for offline localhost builds when Netlify is reachable
+    const url = STATUS_URL + '?t=' + Date.now();
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('status ' + res.status);
+    const status = await res.json();
+    applyRemoteStatus(status);
+    lastStatusCheck = Date.now();
+  } catch (e) {
+    // Network failure — DON'T lock users out. Try fallback if relative failed.
+    try {
+      const res2 = await fetch(STATUS_FALLBACK_URL + '?t=' + Date.now(), { cache: 'no-store' });
+      if (res2.ok) {
+        const status2 = await res2.json();
+        applyRemoteStatus(status2);
+        lastStatusCheck = Date.now();
+        return;
+      }
+    } catch (_) {}
+    console.warn('Status check failed, allowing access:', e.message);
+  }
+}
+
+function applyRemoteStatus(status) {
+  const kill = document.getElementById('killSwitchScreen');
+  const banner = document.getElementById('serviceBanner');
+  if (status.active === false) {
+    if (kill) {
+      kill.style.display = 'flex';
+      const msg = document.getElementById('killSwitchMessage');
+      if (msg && status.message) msg.textContent = status.message;
+    }
+    if (banner) banner.style.display = 'none';
+  } else {
+    if (kill) kill.style.display = 'none';
+    if (status.banner && status.banner.length > 0) {
+      if (banner) {
+        banner.style.display = 'block';
+        banner.textContent = '⚠️ ' + status.banner;
+      }
+    } else if (banner) {
+      banner.style.display = 'none';
+    }
+  }
+}
+
+function recheckKillSwitch() {
+  checkRemoteStatus();
+}
+
+// Re-check every 5 minutes in case operator flips the switch while user is active
+setInterval(checkRemoteStatus, 5 * 60 * 1000);
 
 // v1.16 License/Subscription
 const LICENSE_SECRET = 'thrift-2026-noel-secret-v1';
@@ -2051,7 +2231,7 @@ function renderNetWorthHistory() {
 }
 
 // ====== v1.10 AI Q&A assistant ======
-function askAI() {
+async function askAI() {
   const input = document.getElementById('aiInput');
   const chat = document.getElementById('aiChat');
   if (!input || !chat) return;
@@ -2059,14 +2239,15 @@ function askAI() {
   if (!q) return;
   chat.innerHTML += `<div class="ai-msg user">${q.replace(/</g, '&lt;')}</div>`;
   input.value = '';
-  const answer = answerQuestion(q);
-  setTimeout(() => {
-    chat.innerHTML += `<div class="ai-msg bot">${answer}</div>`;
-    chat.scrollTop = chat.scrollHeight;
-    // Speak aloud if enabled
-    if (document.getElementById('aiSpeakToggle')?.checked) speakAloud(answer);
-  }, 400);
+  const thinkingId = '_thinking_ai_' + Date.now();
+  chat.innerHTML += `<div class="ai-msg bot" id="${thinkingId}">💭 Thinking...</div>`;
   chat.scrollTop = chat.scrollHeight;
+  const answer = await answerQuestionSmart(q);
+  const thinking = document.getElementById(thinkingId);
+  if (thinking) thinking.remove();
+  chat.innerHTML += `<div class="ai-msg bot">${answer}</div>`;
+  chat.scrollTop = chat.scrollHeight;
+  if (document.getElementById('aiSpeakToggle')?.checked) speakAloud(answer);
 }
 
 // ====== v1.10+ Voice for AI assistant ======
@@ -2160,7 +2341,7 @@ function toggleFloatingChat() {
     setTimeout(() => document.getElementById('floatChatInput')?.focus(), 100);
   }
 }
-function floatChatAsk() {
+async function floatChatAsk() {
   const input = document.getElementById('floatChatInput');
   const log = document.getElementById('floatChatLog');
   if (!input || !log) return;
@@ -2168,13 +2349,16 @@ function floatChatAsk() {
   if (!q) return;
   log.innerHTML += `<div class="ai-msg user">${q.replace(/</g, '&lt;')}</div>`;
   input.value = '';
-  const answer = answerQuestion(q);
-  setTimeout(() => {
-    log.innerHTML += `<div class="ai-msg bot">${answer}</div>`;
-    log.scrollTop = log.scrollHeight;
-    if (document.getElementById('floatChatSpeak')?.checked) speakAloud(answer);
-  }, 300);
+  // Show "thinking" placeholder
+  const thinkingId = '_thinking_' + Date.now();
+  log.innerHTML += `<div class="ai-msg bot" id="${thinkingId}">💭 Thinking...</div>`;
   log.scrollTop = log.scrollHeight;
+  const answer = await answerQuestionSmart(q);
+  const thinking = document.getElementById(thinkingId);
+  if (thinking) thinking.remove();
+  log.innerHTML += `<div class="ai-msg bot">${answer}</div>`;
+  log.scrollTop = log.scrollHeight;
+  if (document.getElementById('floatChatSpeak')?.checked) speakAloud(answer);
 }
 function floatChatMic() {
   const btn = document.getElementById('floatChatMicBtn');
@@ -4356,6 +4540,11 @@ function render() {
   if (document.getElementById('accountTypeList')) renderAccountTypeList();
   // v1.16 license status
   if (document.getElementById('licenseStatus')) renderLicenseStatus();
+  // v1.17 sync API config inputs
+  const aiKeyInput = document.getElementById('anthropicKey');
+  const aiModelInput = document.getElementById('anthropicModel');
+  if (aiKeyInput && document.activeElement !== aiKeyInput) aiKeyInput.value = anthropicKey;
+  if (aiModelInput && document.activeElement !== aiModelInput) aiModelInput.value = anthropicModel;
   // v1.15 split view (only in all mode — uses _origTxns since txns may be filtered)
   if (document.getElementById('splitView')) {
     const _t = txns; const _i = income;
@@ -4377,6 +4566,7 @@ function render() {
 }
 
 checkLicenseGate(); // v1.16 — show lock if expired
+checkRemoteStatus(); // v1.18 — remote kill-switch
 render();
 initPlaidLink();
 </script>
