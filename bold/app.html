@@ -877,6 +877,7 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
         <div class="form-group">
           <label>Model</label>
           <select id="anthropicModel" onchange="saveAIConfig()">
+            <option value="auto">🧠 Auto (smart routing — recommended)</option>
             <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fast, cheap ~$0.001/Q)</option>
             <option value="claude-sonnet-4-6">Sonnet 4.6 (balanced)</option>
             <option value="claude-opus-4-7">Opus 4.7 (smartest)</option>
@@ -1148,10 +1149,29 @@ Detected subscriptions (desc|cycle|avg):
 ${subs}`;
 }
 
+// Auto-pick best model based on question complexity
+function pickModelForQuestion(q) {
+  const lower = q.toLowerCase();
+  const wordCount = q.split(/\s+/).length;
+
+  // Strategy / multi-step / advice → Opus (smartest)
+  if (/plan|strategy|should i|recommend|advise|advice|overall|comprehensive|long.term|retirement|invest|trade.?off|balance|prioriti|optimi[sz]e|why am i|why do i|explain|review my|help me decide|big picture|holistic/i.test(lower)) {
+    return 'claude-opus-4-7';
+  }
+  // Comparison / forecast / nuanced → Sonnet (balanced)
+  if (wordCount > 12 || /compare|vs |versus|forecast|predict|trend|analy[sz]e|breakdown|deep.?dive|pattern|habit/i.test(lower)) {
+    return 'claude-sonnet-4-6';
+  }
+  // Simple lookups, single facts → Haiku (fast, cheap)
+  return 'claude-haiku-4-5-20251001';
+}
+
 async function callClaudeAPI(question) {
   if (!anthropicKey) return null;
   try {
     const sym = baseCurrency === 'EUR' ? '€' : baseCurrency === 'GBP' ? '£' : '$';
+    // If model is "auto", pick based on question
+    const modelToUse = anthropicModel === 'auto' ? pickModelForQuestion(question) : anthropicModel;
     const sysPrompt = `You are Thrift, a thoughtful Irish personal-finance advisor talking to ${brandName}. You give SPECIFIC, ACTIONABLE advice based on the user's real data — not generic platitudes.
 
 ADVISORY STYLE:
@@ -1176,7 +1196,7 @@ ${buildAIContext()}`;
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
-        model: anthropicModel,
+        model: modelToUse,
         max_tokens: 512,
         system: sysPrompt,
         messages: [{ role: 'user', content: question }],
@@ -1188,7 +1208,12 @@ ${buildAIContext()}`;
       return `⚠️ API error: ${res.status}. Check your key in Settings.`;
     }
     const data = await res.json();
-    return data.content?.[0]?.text || '(empty response)';
+    const text = data.content?.[0]?.text || '(empty response)';
+    // Annotate with which model was used (so user sees auto-routing in action)
+    const modelLabel = modelToUse.includes('haiku') ? '⚡ Haiku' :
+                       modelToUse.includes('sonnet') ? '🎯 Sonnet' :
+                       modelToUse.includes('opus') ? '🧠 Opus' : '';
+    return text + (anthropicModel === 'auto' ? `<div style="font-size:0.7rem; opacity:0.6; margin-top:6px;">${modelLabel}</div>` : '');
   } catch (e) {
     console.error(e);
     return `⚠️ Network error: ${e.message}`;
