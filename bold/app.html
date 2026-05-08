@@ -1381,10 +1381,11 @@ async function installPWA() {
   _deferredPwaPrompt = null;
   document.getElementById('installBtn').style.display = 'none';
 }
-// Register service worker for offline support
+// Service worker DISABLED in v1.23 — was breaking routing.
+// Auto-unregister any old worker still registered
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((e) => console.warn('SW registration failed:', e));
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((reg) => reg.unregister().catch(() => {}));
   });
 }
 
