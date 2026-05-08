@@ -1149,21 +1149,34 @@ Detected subscriptions (desc|cycle|avg):
 ${subs}`;
 }
 
-// Auto-pick best model based on question complexity
+// Auto-pick best model — biased toward smarter when uncertain.
+// Philosophy: better to occasionally pay €0.04 more than ever give a dumb answer.
 function pickModelForQuestion(q) {
-  const lower = q.toLowerCase();
-  const wordCount = q.split(/\s+/).length;
+  if (!q || !q.trim()) return 'claude-haiku-4-5-20251001';
+  const lower = q.toLowerCase().trim();
+  const wordCount = q.trim().split(/\s+/).length;
 
-  // Strategy / multi-step / advice → Opus (smartest)
-  if (/plan|strategy|should i|recommend|advise|advice|overall|comprehensive|long.term|retirement|invest|trade.?off|balance|prioriti|optimi[sz]e|why am i|why do i|explain|review my|help me decide|big picture|holistic/i.test(lower)) {
+  // OPUS — strategy, multi-factor decisions, "why" questions, advice
+  if (/\b(plan|strategy|strategies|strategic|should i|shouldi|recommend|recommended|recommends|advise|advice|advisor|adviser|overall|comprehensive|long.?term|retirement|retire|invest|investing|investment|trade.?off|prioritise|prioritize|priority|priorities|optimise|optimize|optimal|why|explain|review|decide|deciding|decision|big picture|holistic|future|next year|emergency|debt|loan|mortgage|family|pension|insurance|tax|how can i|how do i|how should|what.?s the best|what should|wonder if|thinking of|dilemma|consider|considering|alternatives?)\b/i.test(lower)) {
     return 'claude-opus-4-7';
   }
-  // Comparison / forecast / nuanced → Sonnet (balanced)
-  if (wordCount > 12 || /compare|vs |versus|forecast|predict|trend|analy[sz]e|breakdown|deep.?dive|pattern|habit/i.test(lower)) {
+
+  // SONNET — analysis, comparisons, patterns, longer questions, anything mid-complexity
+  if (
+    wordCount > 8 ||
+    /\b(compare|vs |versus|forecast|predict|trend|analy[sz]e|analysis|breakdown|deep.?dive|pattern|habit|history|over time|track|track record|sustainable|reasonable|normal|unusual|outlier|spike|reduce|cut|save|saving|projection|estimate|too much|enough|on track|how often|frequent|risk)\b/i.test(lower)
+  ) {
     return 'claude-sonnet-4-6';
   }
-  // Simple lookups, single facts → Haiku (fast, cheap)
-  return 'claude-haiku-4-5-20251001';
+
+  // HAIKU — only for VERY obvious lookups: short, direct, factual
+  // e.g. "how much on coffee", "biggest category", "income this week"
+  if (wordCount <= 6 && /\b(how much|total|biggest|smallest|when|where|list|show|count|net worth)\b/i.test(lower)) {
+    return 'claude-haiku-4-5-20251001';
+  }
+
+  // Default: Sonnet (safer than Haiku for ambiguous questions)
+  return 'claude-sonnet-4-6';
 }
 
 async function callClaudeAPI(question) {
