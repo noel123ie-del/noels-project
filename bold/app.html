@@ -2203,14 +2203,15 @@ function detectDelimiter(lines) {
   return best;
 }
 
-// Parse any common date format
+// Parse any common date format — extremely forgiving
 function parseAnyDate(s) {
+  if (s === null || s === undefined) return null;
+  s = String(s).replace(/"/g, '').trim();
   if (!s) return null;
-  s = s.replace(/"/g, '').trim();
-  // Strip time component
-  s = s.split(/[T ]/)[0];
+  // Strip time component (handles "T", " ", or "," separators between date and time)
+  s = s.split(/[T,]/)[0].split(/\s+/)[0];
 
-  // YYYY-MM-DD or YYYY/MM/DD
+  // YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
   let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/);
   if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
 
@@ -2390,8 +2391,16 @@ function importCSV(event) {
         const lineLower = lines[i].toLowerCase();
         if (/^(total|opening|closing|balance|sum)/i.test(parts[0]) || /\b(end of statement|page \d)/i.test(lineLower)) { log('footer row'); continue; }
 
-        const date = parseAnyDate(parts[cols.date] || '');
-        const desc = (parts[cols.desc] || '').replace(/"/g, '').trim();
+        let date = parseAnyDate(parts[cols.date] || '');
+        // Fallback: try OTHER columns if main date column failed
+        if (!date) {
+          for (let j = 0; j < parts.length; j++) {
+            if (j === cols.date) continue;
+            const tryDate = parseAnyDate(parts[j]);
+            if (tryDate) { date = tryDate; break; }
+          }
+        }
+        const desc = (parts[cols.desc] || parts[cols.desc + 1] || '').replace(/"/g, '').trim();
         if (!date) { log('bad date'); continue; }
         if (!desc) { log('no description'); continue; }
 
@@ -2457,7 +2466,24 @@ function importCSV(event) {
 
       if (imported === 0) {
         const reasons = Object.entries(skipReasons).map(([r,c]) => `  • ${r}: ${c}`).join('\n');
-        return alert(`❌ Could not import any transactions.\n\nDelimiter: "${delim}"\nHeader row: ${headerIdx + 1}\nDate col: ${header[cols.date] || 'NOT FOUND'}\nDesc col: ${header[cols.desc] || 'NOT FOUND'}\nDebit col: ${header[cols.debit] || 'n/a'}\nCredit col: ${header[cols.credit] || 'n/a'}\nAmount col: ${header[cols.amount] || 'n/a'}\n\nSkipped (${skipped}):\n${reasons}`);
+        // Show first 2 raw data rows so user can see the format
+        const sampleRows = [];
+        for (let i = headerIdx + 1; i < Math.min(headerIdx + 3, lines.length); i++) {
+          const parts = parseCSVLine(lines[i], delim);
+          sampleRows.push(`Row ${i}: [${parts.map((p, j) => `${header[j] || 'col' + j}="${p}"`).join('] [')}]`);
+        }
+        // Also show what we tried to parse for first data row
+        let parseAttempt = '';
+        if (lines[headerIdx + 1]) {
+          const parts = parseCSVLine(lines[headerIdx + 1], delim);
+          const dateStr = parts[cols.date] || '';
+          const desc = parts[cols.desc] || '';
+          const debit = parts[cols.debit] || '';
+          const credit = parts[cols.credit] || '';
+          const amount = parts[cols.amount] || '';
+          parseAttempt = `\n\nFirst row parse attempt:\n  Date "${dateStr}" → ${parseAnyDate(dateStr) || '❌ FAILED'}\n  Desc "${desc}" → ${desc ? '✓' : '❌ EMPTY'}\n  Debit "${debit}" → ${parseAmount(debit) ?? '❌'}\n  Credit "${credit}" → ${parseAmount(credit) ?? '❌'}\n  Amount "${amount}" → ${parseAmount(amount) ?? '❌'}`;
+        }
+        return alert(`❌ Could not import any transactions.\n\nDelimiter: "${delim}"\nHeader row: ${headerIdx + 1}\nDate col: ${header[cols.date] || 'NOT FOUND'}\nDesc col: ${header[cols.desc] || 'NOT FOUND'}\nDebit col: ${header[cols.debit] || 'n/a'}\nCredit col: ${header[cols.credit] || 'n/a'}\nAmount col: ${header[cols.amount] || 'n/a'}${parseAttempt}\n\nSkipped (${skipped}):\n${reasons}\n\nSample data:\n${sampleRows.join('\n')}`);
       }
       save();
       render();
