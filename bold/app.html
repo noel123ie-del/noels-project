@@ -718,6 +718,55 @@
       <div id="voiceTranscript" style="margin-top: 10px; color: var(--text-muted); font-size: 0.9rem;"></div>
     </div>
 
+    <div class="form-card" id="licenseCard">
+      <h3>🔐 Subscription / License</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Your access expires on the date below. Enter a renewal code to extend.</p>
+      <div id="licenseStatus" style="margin-bottom: 12px;"></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Renewal code</label>
+          <input type="text" id="licenseKeyInput" placeholder="THRIFT-2027-01-01-XXXX">
+        </div>
+        <div class="form-group" style="display:flex; align-items:end;">
+          <button class="btn btn-primary" onclick="redeemLicense()" style="width: 100%;">Redeem Code</button>
+        </div>
+      </div>
+      <details style="margin-top: 16px;">
+        <summary style="cursor: pointer; font-weight: 700; color: var(--accent); font-size: 0.85rem;">🛠️ Admin — Generate Codes</summary>
+        <p style="color: var(--text-muted); font-size: 0.8rem; margin: 8px 0;">Generate codes for customers. Pick an expiry date.</p>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Expires on</label>
+            <input type="date" id="adminExpiryInput">
+          </div>
+          <div class="form-group" style="display:flex; align-items:end;">
+            <button class="btn btn-primary" onclick="adminGenerateCode()" style="width:100%; background: var(--success);">Generate</button>
+          </div>
+        </div>
+        <div id="adminGeneratedCode" style="margin-top: 8px; font-family: monospace; font-size: 0.95rem;"></div>
+      </details>
+    </div>
+
+    <div class="form-card">
+      <h3>🧠 Smart AI (Claude API)</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Optional: paste an Anthropic API key for truly intelligent answers. Stored only in your browser, sent only to api.anthropic.com when you ask a question.</p>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Anthropic API key (sk-ant-...)</label>
+          <input type="password" id="anthropicKey" placeholder="leave blank to use rules engine" oninput="saveAIConfig()">
+        </div>
+        <div class="form-group">
+          <label>Model</label>
+          <select id="anthropicModel" onchange="saveAIConfig()">
+            <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fast, cheap ~$0.001/Q)</option>
+            <option value="claude-sonnet-4-6">Sonnet 4.6 (balanced)</option>
+            <option value="claude-opus-4-7">Opus 4.7 (smartest)</option>
+          </select>
+        </div>
+      </div>
+      <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 8px;">Get a key from <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color: var(--accent);">console.anthropic.com</a>. Without a key, rules engine still answers most questions for free.</p>
+    </div>
+
     <div class="form-card">
       <h3>📋 Save Rules</h3>
       <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">"Save €X every time Y" — automated savings triggers</p>
@@ -762,6 +811,21 @@
     </div>
   </div>
 
+</div>
+
+<!-- Subscription expired lock screen -->
+<div id="lockScreen" style="display: none; position: fixed; inset: 0; background: linear-gradient(135deg, #0f1419, #2a3142); color: white; z-index: 99999; align-items: center; justify-content: center; padding: 20px;">
+  <div style="max-width: 480px; text-align: center;">
+    <div style="font-size: 4rem;">🔐</div>
+    <h2 style="font-size: 2rem; margin: 16px 0;">Subscription expired</h2>
+    <p id="lockMessage" style="color: #a0aec0; margin-bottom: 24px; line-height: 1.6;"></p>
+    <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; margin-bottom: 16px;">
+      <label style="font-size: 0.85rem; opacity: 0.85; display: block; margin-bottom: 8px;">Enter renewal code to continue</label>
+      <input type="text" id="lockKeyInput" placeholder="THRIFT-2027-XX-XX-XXXX" style="width: 100%; padding: 12px; border: none; border-radius: 8px; font-family: monospace; font-size: 1rem; background: white; color: #2c3e50;">
+      <button onclick="lockRedeem()" style="width: 100%; margin-top: 10px; padding: 12px; background: linear-gradient(135deg, #43e97b, #38f9d7); color: white; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 1rem;">Activate</button>
+    </div>
+    <p style="font-size: 0.85rem; opacity: 0.7;">Your data is safe — saved locally and won't be lost. Contact your provider for a new code.</p>
+  </div>
 </div>
 
 <!-- FAB - Floating Action Button (moved bottom-left to make room for chat) -->
@@ -819,6 +883,135 @@ let voiceListening = false;
 
 // v1.10 data
 let netWorthHistory = JSON.parse(localStorage.getItem('netWorthHistory') || '[]');
+
+// v1.16 License/Subscription
+const LICENSE_SECRET = 'thrift-2026-noel-secret-v1';
+let licenseExpiry = localStorage.getItem('licenseExpiry') || '';
+
+// Simple checksum (not cryptographically secure, just to prevent random keys working)
+function licenseChecksum(dateStr) {
+  let h = 0;
+  const input = dateStr + LICENSE_SECRET;
+  for (let i = 0; i < input.length; i++) {
+    h = ((h << 5) - h) + input.charCodeAt(i);
+    h |= 0;
+  }
+  return Math.abs(h).toString(36).toUpperCase().slice(0, 4).padStart(4, '0');
+}
+
+function generateLicenseCode(dateStr) {
+  // dateStr: YYYY-MM-DD
+  return `THRIFT-${dateStr}-${licenseChecksum(dateStr)}`;
+}
+
+function validateLicenseCode(code) {
+  const m = code.toUpperCase().trim().match(/^THRIFT-(\d{4}-\d{2}-\d{2})-([A-Z0-9]{4})$/);
+  if (!m) return null;
+  const [, dateStr, checksum] = m;
+  if (licenseChecksum(dateStr) !== checksum) return null;
+  // Validate date
+  if (isNaN(new Date(dateStr).getTime())) return null;
+  return dateStr;
+}
+
+function isExpired() {
+  if (!licenseExpiry) {
+    // First launch — give 30-day trial
+    const trial = new Date();
+    trial.setDate(trial.getDate() + 30);
+    licenseExpiry = trial.toISOString().split('T')[0];
+    localStorage.setItem('licenseExpiry', licenseExpiry);
+    localStorage.setItem('trialActivated', 'true');
+    return false;
+  }
+  const today = new Date().toISOString().split('T')[0];
+  return today > licenseExpiry;
+}
+
+function daysUntilExpiry() {
+  if (!licenseExpiry) return 9999;
+  const now = new Date();
+  const exp = new Date(licenseExpiry);
+  return Math.ceil((exp - now) / 86400000);
+}
+
+function checkLicenseGate() {
+  if (isExpired()) {
+    const lock = document.getElementById('lockScreen');
+    const msg = document.getElementById('lockMessage');
+    if (lock) {
+      lock.style.display = 'flex';
+      if (msg) msg.textContent = `Your access expired on ${licenseExpiry}. Enter a valid renewal code from your provider to continue using Thrift. Your data is preserved.`;
+    }
+    return false;
+  }
+  return true;
+}
+
+function lockRedeem() {
+  const input = document.getElementById('lockKeyInput');
+  if (!input) return;
+  const code = input.value.trim();
+  const validDate = validateLicenseCode(code);
+  if (!validDate) {
+    input.style.background = '#ffe0e0';
+    setTimeout(() => input.style.background = 'white', 1500);
+    return;
+  }
+  const today = new Date().toISOString().split('T')[0];
+  if (validDate <= today) {
+    alert('That code has already expired. Get a fresh one.');
+    return;
+  }
+  licenseExpiry = validDate;
+  localStorage.setItem('licenseExpiry', licenseExpiry);
+  document.getElementById('lockScreen').style.display = 'none';
+  showToast(`✅ Renewed until ${licenseExpiry}`);
+  render();
+}
+
+function redeemLicense() {
+  const input = document.getElementById('licenseKeyInput');
+  if (!input) return;
+  const code = input.value.trim();
+  const validDate = validateLicenseCode(code);
+  if (!validDate) return alert('❌ Invalid code. Format: THRIFT-YYYY-MM-DD-XXXX');
+  const today = new Date().toISOString().split('T')[0];
+  if (validDate <= today) return alert('That code has already expired.');
+  licenseExpiry = validDate;
+  localStorage.setItem('licenseExpiry', licenseExpiry);
+  input.value = '';
+  showToast(`✅ Renewed until ${licenseExpiry}`);
+  renderLicenseStatus();
+}
+
+function adminGenerateCode() {
+  const input = document.getElementById('adminExpiryInput');
+  if (!input) return;
+  const date = input.value;
+  if (!date) return alert('Pick an expiry date');
+  const code = generateLicenseCode(date);
+  const out = document.getElementById('adminGeneratedCode');
+  if (out) {
+    out.innerHTML = `
+      <div style="background: var(--bg-soft); padding: 12px; border-radius: 8px; margin-top: 8px;">
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Code expires ${date}:</div>
+        <div style="font-size: 1.1rem; font-weight: 700; color: var(--accent); user-select: all; cursor: copy;" onclick="navigator.clipboard.writeText(this.textContent.trim()).then(()=>showToast('📋 Copied'))">${code}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px;">Click code to copy. Send to customer.</div>
+      </div>`;
+  }
+}
+
+function renderLicenseStatus() {
+  const el = document.getElementById('licenseStatus');
+  if (!el) return;
+  const days = daysUntilExpiry();
+  let bg, icon, text;
+  if (days < 0) { bg = '#ff5e5e'; icon = '🚨'; text = `EXPIRED on ${licenseExpiry}`; }
+  else if (days <= 7) { bg = '#f6a93b'; icon = '⚠️'; text = `Expires in ${days} day${days === 1 ? '' : 's'} (${licenseExpiry})`; }
+  else { bg = '#27ae60'; icon = '✅'; text = `Active until ${licenseExpiry} (${days} days)`; }
+  el.innerHTML = `<div style="background: ${bg}; color: white; padding: 12px; border-radius: 8px; font-weight: 700;">${icon} ${text}</div>`;
+}
 
 // v1.14 Personal/Business context
 const defaultAccountTypes = {
@@ -4161,6 +4354,8 @@ function render() {
   if (document.getElementById('netWorthHistoryChart')) renderNetWorthHistory();
   // v1.14 context UI
   if (document.getElementById('accountTypeList')) renderAccountTypeList();
+  // v1.16 license status
+  if (document.getElementById('licenseStatus')) renderLicenseStatus();
   // v1.15 split view (only in all mode — uses _origTxns since txns may be filtered)
   if (document.getElementById('splitView')) {
     const _t = txns; const _i = income;
@@ -4181,6 +4376,7 @@ function render() {
   }
 }
 
+checkLicenseGate(); // v1.16 — show lock if expired
 render();
 initPlaidLink();
 </script>
