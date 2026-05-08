@@ -1,7 +1,8 @@
-# LOCKED v1.25 — Claude API as primary brain
+# LOCKED v1.25 — AI Advisor Mode
 
 Live URL: https://comfy-donut-f8587d.netlify.app/locked-v1.25/app
-Tag: v1.25-claude-primary
+Tag: v1.25-ai-advisor
 
-When API key is set, all real questions go to Claude API directly
-(rules only handle greetings/small talk). Far smarter answers.
+Claude API now primary brain (not fallback). Advisory prompt with Irish
+context: Lidl/Aldi savings, GoMo, bonkers.ie etc. Gives concrete
+cut suggestions with Euro savings.
