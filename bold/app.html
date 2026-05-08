@@ -888,6 +888,39 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
     </div>
 
     <div class="form-card">
+      <h3>🎨 Branding</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Customise the app for yourself or your brand</p>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>App name (shown in header)</label>
+          <input type="text" id="brandName" placeholder="e.g. Anna's Money" oninput="saveBranding()">
+        </div>
+        <div class="form-group">
+          <label>Logo emoji or upload</label>
+          <input type="text" id="brandEmoji" placeholder="💰 or 🏠" maxlength="2" oninput="saveBranding()">
+        </div>
+      </div>
+      <div style="margin-top: 8px;">
+        <input type="file" id="brandLogoFile" accept="image/*" style="display:none;" onchange="uploadLogo(event)">
+        <button class="btn btn-primary" onclick="document.getElementById('brandLogoFile').click()" style="width:100%;">📷 Upload custom logo image</button>
+        <button class="btn btn-primary" onclick="resetBranding()" style="width:100%; margin-top:8px; background: var(--text-muted);">Reset to default</button>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <h3>💾 Backup & Restore</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Save everything to a file or restore from a backup</p>
+      <button class="btn btn-primary" onclick="exportFullBackup()" style="width:100%; margin-bottom:8px;">⬇️ Download Full Backup (JSON)</button>
+      <input type="file" id="backupFile" accept=".json" style="display:none;" onchange="importFullBackup(event)">
+      <button class="btn btn-primary" onclick="document.getElementById('backupFile').click()" style="width:100%; background: var(--accent-2);">⬆️ Restore from Backup File</button>
+    </div>
+
+    <div class="form-card">
+      <h3>⏪ Undo Recent Deletions</h3>
+      <div id="trashList"></div>
+    </div>
+
+    <div class="form-card">
       <h3>📄 Export & Print</h3>
       <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Statement-style print/PDF</p>
       <button class="btn btn-primary" onclick="printStatement()" style="width: 100%; margin-bottom: 8px;">🖨️ Print / Save as PDF</button>
@@ -1305,6 +1338,199 @@ const _origSave = save;
 save = function() {
   _origSave();
   if (syncEnabled && !partnerMode && firebaseProject && shareCode) scheduleSync();
+};
+
+// ===== v1.20 Branding =====
+let brandName = localStorage.getItem('brandName') || 'Noel';
+let brandEmoji = localStorage.getItem('brandEmoji') || '💰';
+let brandLogo = localStorage.getItem('brandLogo') || ''; // base64 image
+
+function saveBranding() {
+  brandName = document.getElementById('brandName')?.value || brandName;
+  brandEmoji = document.getElementById('brandEmoji')?.value || brandEmoji;
+  localStorage.setItem('brandName', brandName);
+  localStorage.setItem('brandEmoji', brandEmoji);
+  applyBranding();
+}
+function uploadLogo(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 500 * 1024) { alert('Logo too large (max 500KB)'); return; }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    brandLogo = ev.target.result;
+    localStorage.setItem('brandLogo', brandLogo);
+    applyBranding();
+    showToast('🎨 Logo updated');
+  };
+  reader.readAsDataURL(file);
+}
+function resetBranding() {
+  brandName = 'Noel';
+  brandEmoji = '💰';
+  brandLogo = '';
+  localStorage.removeItem('brandName');
+  localStorage.removeItem('brandEmoji');
+  localStorage.removeItem('brandLogo');
+  applyBranding();
+  showToast('✅ Branding reset');
+  render();
+}
+function applyBranding() {
+  const logo = document.querySelector('header .logo');
+  if (!logo) return;
+  if (brandLogo) {
+    logo.innerHTML = `<img src="${brandLogo}" style="height:32px; vertical-align:middle; margin-right:8px;"> ${brandName}`;
+  } else {
+    logo.innerHTML = `${brandEmoji} ${brandName}`;
+  }
+  document.title = `${brandName} - Budget Tracker`;
+  // Sync inputs
+  const nameInput = document.getElementById('brandName');
+  const emojiInput = document.getElementById('brandEmoji');
+  if (nameInput && document.activeElement !== nameInput) nameInput.value = brandName;
+  if (emojiInput && document.activeElement !== emojiInput) emojiInput.value = brandEmoji;
+}
+
+// ===== v1.20 Full backup & restore =====
+function exportFullBackup() {
+  const data = {
+    _exportedAt: new Date().toISOString(),
+    _version: '1.20',
+    txns, income, catBudgets, weeklyBudget, transactionType,
+    goals, assets, liabilities, pots, paydayDay,
+    userCategoryRules, accountTypes, contextBudgets,
+    netWorthHistory, baseCurrency, saveRules,
+    brandName, brandEmoji, brandLogo,
+    licenseExpiry,
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `thrift-backup-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('💾 Backup downloaded');
+}
+
+function importFullBackup(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!confirm(`Restore this backup?\n\nDate: ${data._exportedAt}\nVersion: ${data._version || 'unknown'}\nTransactions: ${data.txns?.length || 0}\n\nThis will REPLACE all your current data.`)) return;
+      // Apply
+      if (data.txns) txns = data.txns;
+      if (data.income) income = data.income;
+      if (data.catBudgets) catBudgets = data.catBudgets;
+      if (data.weeklyBudget) weeklyBudget = data.weeklyBudget;
+      if (data.goals) goals = data.goals;
+      if (data.assets) assets = data.assets;
+      if (data.liabilities) liabilities = data.liabilities;
+      if (data.pots) pots = data.pots;
+      if (data.paydayDay !== undefined) paydayDay = data.paydayDay;
+      if (data.userCategoryRules) userCategoryRules = data.userCategoryRules;
+      if (data.accountTypes) accountTypes = data.accountTypes;
+      if (data.contextBudgets) contextBudgets = data.contextBudgets;
+      if (data.netWorthHistory) netWorthHistory = data.netWorthHistory;
+      if (data.baseCurrency) baseCurrency = data.baseCurrency;
+      if (data.saveRules) saveRules = data.saveRules;
+      if (data.brandName) { brandName = data.brandName; localStorage.setItem('brandName', brandName); }
+      if (data.brandEmoji) { brandEmoji = data.brandEmoji; localStorage.setItem('brandEmoji', brandEmoji); }
+      if (data.brandLogo !== undefined) { brandLogo = data.brandLogo; localStorage.setItem('brandLogo', brandLogo); }
+      if (data.licenseExpiry) { licenseExpiry = data.licenseExpiry; localStorage.setItem('licenseExpiry', licenseExpiry); }
+      save();
+      applyBranding();
+      render();
+      showToast(`✅ Restored backup with ${txns.length} transactions`);
+    } catch (err) {
+      alert('❌ Invalid backup file: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ===== v1.20 Undo (Trash) =====
+let trash = JSON.parse(localStorage.getItem('trash') || '[]');
+
+function moveToTrash(item, type) {
+  trash.unshift({ id: Date.now() + Math.random(), type, item, deletedAt: new Date().toISOString() });
+  if (trash.length > 20) trash = trash.slice(0, 20); // keep last 20
+  localStorage.setItem('trash', JSON.stringify(trash));
+}
+
+function restoreFromTrash(id) {
+  const idx = trash.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  const entry = trash[idx];
+  // Restore based on type
+  if (entry.type === 'txn') txns.push(entry.item);
+  else if (entry.type === 'income') income.push(entry.item);
+  else if (entry.type === 'goal') goals.push(entry.item);
+  else if (entry.type === 'asset') assets.push(entry.item);
+  else if (entry.type === 'liability') liabilities.push(entry.item);
+  else if (entry.type === 'pot') pots.push(entry.item);
+  trash.splice(idx, 1);
+  localStorage.setItem('trash', JSON.stringify(trash));
+  save();
+  render();
+  showToast('⏪ Restored');
+}
+
+function emptyTrash() {
+  if (!confirm('Empty trash? Items can\'t be recovered after this.')) return;
+  trash = [];
+  localStorage.setItem('trash', JSON.stringify(trash));
+  renderTrash();
+  showToast('🗑️ Trash emptied');
+}
+
+function renderTrash() {
+  const list = document.getElementById('trashList');
+  if (!list) return;
+  if (!trash.length) {
+    list.innerHTML = '<div class="empty-state"><div class="illust">🗑️</div><div class="title">Nothing to undo</div><div class="hint">Recently deleted transactions appear here for 20 most recent items.</div></div>';
+    return;
+  }
+  list.innerHTML = trash.map(t => {
+    const desc = t.item.desc || t.item.name || 'Unknown';
+    const amount = t.item.amount || t.item.value || t.item.balance || 0;
+    const when = new Date(t.deletedAt).toLocaleString();
+    return `
+      <div style="background: var(--bg-soft); padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight: 700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${desc}</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted);">${t.type} · ${currencySymbol()}${Math.abs(amount).toFixed(2)} · deleted ${when}</div>
+        </div>
+        <button class="btn btn-primary" onclick="restoreFromTrash(${t.id})" style="padding:6px 12px; font-size:0.85rem;">⏪ Restore</button>
+      </div>`;
+  }).join('') + `<button class="btn btn-primary" onclick="emptyTrash()" style="width:100%; margin-top: 8px; background: var(--danger);">🗑️ Empty trash</button>`;
+}
+
+// Wrap delete functions to move to trash
+const _origDeleteTxn = deleteTxn;
+deleteTxn = function(id) {
+  const txn = txns.find(t => t.id === id);
+  if (!txn) return;
+  if (!confirm(`Delete "${txn.desc}"? You can undo for 20 most recent deletions.`)) return;
+  moveToTrash(txn, 'txn');
+  txns = txns.filter(t => t.id !== id);
+  save();
+  render();
+};
+const _origDeleteIncome = deleteIncome;
+deleteIncome = function(id) {
+  const inc = income.find(i => i.id === id);
+  if (!inc) return;
+  if (!confirm('Delete this income entry?')) return;
+  moveToTrash(inc, 'income');
+  income = income.filter(i => i.id !== id);
+  save();
+  render();
 };
 
 // ===== v1.19 Anti-copy: Domain lock =====
@@ -4921,6 +5147,9 @@ function render() {
   if (document.getElementById('accountTypeList')) renderAccountTypeList();
   // v1.16 license status
   if (document.getElementById('licenseStatus')) renderLicenseStatus();
+  // v1.20 branding + trash
+  applyBranding();
+  if (document.getElementById('trashList')) renderTrash();
   // v1.18 sync UI sync
   const fp = document.getElementById('firebaseProject');
   const sc = document.getElementById('shareCode');
