@@ -1197,6 +1197,18 @@ function pickModelForQuestion(q) {
   return 'claude-sonnet-4-6';
 }
 
+// v1.34: Chat history for conversation memory across turns
+let chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+function pushChatTurn(role, content) {
+  chatHistory.push({ role, content });
+  if (chatHistory.length > 12) chatHistory = chatHistory.slice(-12);
+  localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+}
+function clearChatHistory() {
+  chatHistory = [];
+  localStorage.setItem('chatHistory', '[]');
+}
+
 async function callClaudeAPI(question) {
   if (!anthropicKey) return null;
   try {
