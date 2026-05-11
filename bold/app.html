@@ -2895,24 +2895,20 @@ async function importViaAI(file, kind) {
   const progress = document.getElementById('importProgress');
   const setProgress = (msg) => { if (progress) { progress.style.display = 'block'; progress.textContent = msg; } };
 
-  // User-facing limit: 25MB for both. Internally, images must be ≤5MB for Anthropic, so we auto-compress.
-  const USER_LIMIT = 25 * 1024 * 1024;
+  // No user-side size cap. Auto-compress images to fit API; PDFs sent as-is.
   const API_IMAGE_LIMIT = 5 * 1024 * 1024;
-  if (file.size > USER_LIMIT) {
-    const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-    setProgress('');
-    return alert(`❌ File too large: ${sizeMB}MB (max 25MB).\n\nOptions:\n1. Compress at https://www.ilovepdf.com/compress_pdf (PDFs)\n2. Use https://tinypng.com (images)\n3. Export CSV from your bank — way smaller`);
-  }
-  // For images > Anthropic's 5MB API cap, auto-compress
   if (kind === 'image' && file.size > API_IMAGE_LIMIT) {
-    setProgress(`📐 Image is ${(file.size/1024/1024).toFixed(1)}MB — compressing for upload...`);
+    setProgress(`📐 Image is ${(file.size/1024/1024).toFixed(1)}MB — auto-compressing...`);
     try {
       file = await compressImage(file, API_IMAGE_LIMIT);
       setProgress(`✅ Compressed to ${(file.size/1024/1024).toFixed(1)}MB`);
     } catch (e) {
       setProgress('');
-      return alert(`❌ Couldn't compress image: ${e.message}\n\nTry a lower-resolution screenshot.`);
+      return alert(`❌ Couldn't compress image: ${e.message}`);
     }
+  }
+  if (kind === 'pdf' && file.size > 30 * 1024 * 1024) {
+    setProgress(`⚠️ Large PDF (${(file.size/1024/1024).toFixed(1)}MB) — trying upload...`);
   }
 
   setProgress('📷 Reading file...');
