@@ -467,6 +467,8 @@
         <span class="chip" onclick="applyQuickChip('month')">This Month</span>
         <span class="chip" onclick="applyQuickChip('lastmonth')">Last Month</span>
         <span class="chip" onclick="applyQuickChip('year')">This Year</span>
+        <span class="chip" onclick="applyQuickChip('under20')">Under €20</span>
+        <span class="chip" onclick="applyQuickChip('under30')">Under €30</span>
         <span class="chip" onclick="applyQuickChip('over50')">Over €50</span>
         <span class="chip" onclick="applyQuickChip('over100')">Over €100</span>
         <span class="chip" onclick="applyQuickChip('out')">Spending only</span>
@@ -5622,13 +5624,16 @@ function applyQuickChip(filter) {
       break;
     }
     case 'year': document.getElementById('txFrom').value = `${todayDate.getFullYear()}-01-01`; document.getElementById('txTo').value = today; break;
-    case 'over50': document.getElementById('txSort').value = 'amt-desc'; window._minAmount = 50; break;
-    case 'over100': document.getElementById('txSort').value = 'amt-desc'; window._minAmount = 100; break;
+    case 'under20': document.getElementById('txSort').value = 'amt-asc'; window._maxAmount = 20; window._minAmount = 0; break;
+    case 'under30': document.getElementById('txSort').value = 'amt-asc'; window._maxAmount = 30; window._minAmount = 0; break;
+    case 'over50': document.getElementById('txSort').value = 'amt-desc'; window._minAmount = 50; window._maxAmount = 0; break;
+    case 'over100': document.getElementById('txSort').value = 'amt-desc'; window._minAmount = 100; window._maxAmount = 0; break;
     case 'out': document.getElementById('txType').value = 'out'; break;
     case 'in': document.getElementById('txType').value = 'in'; break;
     default: window._minAmount = 0;
   }
   if (filter !== 'over50' && filter !== 'over100') window._minAmount = 0;
+  if (filter !== 'under20' && filter !== 'under30') window._maxAmount = 0;
   renderAllTransactions();
 }
 
@@ -5687,6 +5692,7 @@ function getFilteredTransactions() {
     );
   }
   if (window._minAmount > 0) combined = combined.filter(t => t.amount >= window._minAmount);
+  if (window._maxAmount > 0) combined = combined.filter(t => t.amount <= window._maxAmount);
 
   switch (sort) {
     case 'date-asc':  combined.sort((a,b) => new Date(a.date) - new Date(b.date)); break;
