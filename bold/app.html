@@ -2895,8 +2895,12 @@ async function importViaAI(file, kind) {
   const progress = document.getElementById('importProgress');
   const setProgress = (msg) => { if (progress) { progress.style.display = 'block'; progress.textContent = msg; } };
 
-  if (file.size > 5 * 1024 * 1024) { // 5MB cap
-    alert('❌ File too large (max 5MB). Try a smaller image or split the PDF.');
+  // Anthropic API limits: 5MB images, 32MB PDFs. Allow up to 25MB to be safe.
+  const maxBytes = kind === 'pdf' ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+    const maxMB = (maxBytes / 1024 / 1024).toFixed(0);
+    alert(`❌ File too large: ${sizeMB}MB (max ${maxMB}MB for ${kind === 'pdf' ? 'PDFs' : 'images'}).\n\nOptions:\n1. Compress PDF: use https://www.ilovepdf.com/compress_pdf (free)\n2. Split PDF by pages: https://www.ilovepdf.com/split_pdf (free)\n3. Export CSV from your bank instead — way smaller + faster\n4. Re-screenshot at lower resolution if it's an image`);
     return;
   }
 
