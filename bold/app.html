@@ -1203,21 +1203,37 @@ async function callClaudeAPI(question) {
     const sym = baseCurrency === 'EUR' ? '€' : baseCurrency === 'GBP' ? '£' : '$';
     // If model is "auto", pick based on question
     const modelToUse = anthropicModel === 'auto' ? pickModelForQuestion(question) : anthropicModel;
-    const sysPrompt = `You are Thrift, a thoughtful Irish personal-finance advisor talking to ${brandName}. You give SPECIFIC, ACTIONABLE advice based on the user's real data — not generic platitudes.
+    const sysPrompt = `You are Thrift — a warm, sharp Irish friend who happens to know everything about ${brandName}'s money. Talk like a real person, not a bot.
 
-ADVISORY STYLE:
-- Always reference actual numbers from the data (e.g. "Your €127 on Eating Out & Coffee last week is 18% above your average").
-- Suggest concrete cuts with monthly Euro savings ("Cancel Netflix → save €144/yr").
-- For Irish/UK context: know Lidl/Aldi are 30% cheaper than Tesco/Dunnes. Recommend bonkers.ie for energy/broadband switching. Suggest GoMo (€12.99/mo) over expensive mobile contracts.
-- If asked about a category or merchant, look up exact spending and compare to history.
-- For "should I afford X?" — check budget remaining + upcoming bills, give a direct yes/no.
-- For budgeting advice — analyse actual patterns, suggest realistic targets based on their history (not arbitrary numbers).
-- If a transaction seems unusual (much larger than typical), flag it.
-- Be warm, direct, and brief (3-5 sentences for most answers, longer for plans).
-- Use ${sym} for amounts. Format numbers nicely.
-- If you can't answer from the data, say so honestly and suggest what info would help.
+TONE:
+- Casual, direct. Use contractions ("you're", "don't", "I'd").
+- "honestly", "look", "yeah", "hmm" are fine.
+- Brief — usually 2-3 sentences. Longer ONLY if they asked for a plan.
+- Address them as ${brandName} occasionally (not every message).
+- Have opinions. Tell them when something's a bad idea.
+- Acknowledge feelings: "that's stressful", "good news!", "ouch".
+- Sometimes ask a follow-up back ("Want me to check last month too?").
+
+CONTENT:
+- Always reference REAL numbers from their data (e.g. "you spent €127 on coffee last week — 40% more than usual").
+- Concrete cuts with savings: "Cancel Netflix → save €180/year".
+- Irish context: Lidl/Aldi 30% cheaper than Tesco. bonkers.ie for energy. GoMo €12.99/mo mobile.
+- "Should I afford X?" → check budget + bills → direct yes/no.
+- Flag unusual transactions ("that €450 thing on Tuesday — what was that?").
+- If you can't answer from data, say so honestly.
+
+FORMATTING:
+- Use ${sym} for amounts. Format nicely (€1,234.56).
+- Plain text — no markdown unless they asked for a list.
+
+REMEMBER prior messages in this conversation. If they say "what about last month?" you know they mean the same topic as before.
 
 ${buildAIContext()}`;
+
+    // v1.34: Build messages array from last 6 turns for memory
+    const recentHistory = chatHistory.slice(-6);
+    const messages = [...recentHistory, { role: 'user', content: question }];
+
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -1230,7 +1246,7 @@ ${buildAIContext()}`;
         model: modelToUse,
         max_tokens: 512,
         system: sysPrompt,
-        messages: [{ role: 'user', content: question }],
+        messages,
       }),
     });
     if (!res.ok) {
@@ -3620,6 +3636,21 @@ if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
   window.speechSynthesis.addEventListener?.('voiceschanged', () => {});
 }
 
+// v1.34 chat header buttons
+function clearFloatChat() {
+  if (!confirm('Clear this conversation?')) return;
+  clearChatHistory();
+  const log = document.getElementById('floatChatLog');
+  if (log) log.innerHTML = '<div class="ai-msg bot">👋 Fresh start. Ask me anything.</div>';
+  showToast('🗑️ Conversation cleared');
+}
+function copyFloatChat() {
+  const log = document.getElementById('floatChatLog');
+  if (!log) return;
+  const text = Array.from(log.querySelectorAll('.ai-msg')).map(m => (m.classList.contains('user') ? 'You: ' : 'Thrift: ') + (m.textContent || '').trim()).join('\n\n');
+  navigator.clipboard.writeText(text).then(() => showToast('📋 Conversation copied'));
+}
+
 // ====== Floating chat widget (bottom-right) ======
 function toggleFloatingChat() {
   const panel = document.getElementById('chatPanel');
@@ -3643,15 +3674,18 @@ async function floatChatAsk() {
   if (!q) return;
   log.innerHTML += `<div class="ai-msg user">${q.replace(/</g, '&lt;')}</div>`;
   input.value = '';
-  // Show "thinking" placeholder
+  // Thinking indicator with animated dots
   const thinkingId = '_thinking_' + Date.now();
-  log.innerHTML += `<div class="ai-msg bot" id="${thinkingId}">💭 Thinking...</div>`;
+  log.innerHTML += `<div class="ai-msg bot" id="${thinkingId}"><span class="typing-dots"><span></span><span></span><span></span></span></div>`;
   log.scrollTop = log.scrollHeight;
+  pushChatTurn('user', q);
   const answer = await answerQuestionSmart(q);
   const thinking = document.getElementById(thinkingId);
   if (thinking) thinking.remove();
   log.innerHTML += `<div class="ai-msg bot">${answer}</div>`;
   log.scrollTop = log.scrollHeight;
+  // Strip HTML from answer before storing as plain text in history
+  pushChatTurn('assistant', stripHTML(answer));
   if (document.getElementById('floatChatSpeak')?.checked) speakAloud(answer);
 }
 function floatChatMic() {
