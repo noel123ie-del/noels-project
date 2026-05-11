@@ -2895,13 +2895,26 @@ async function importViaAI(file, kind) {
   const progress = document.getElementById('importProgress');
   const setProgress = (msg) => { if (progress) { progress.style.display = 'block'; progress.textContent = msg; } };
 
-  // Anthropic API limits: 5MB images, 32MB PDFs. Allow up to 25MB to be safe.
+  // PDFs go up to 25MB (Anthropic supports 32MB), images need 5MB
   const maxBytes = kind === 'pdf' ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
   if (file.size > maxBytes) {
-    const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-    const maxMB = (maxBytes / 1024 / 1024).toFixed(0);
-    alert(`❌ File too large: ${sizeMB}MB (max ${maxMB}MB for ${kind === 'pdf' ? 'PDFs' : 'images'}).\n\nOptions:\n1. Compress PDF: use https://www.ilovepdf.com/compress_pdf (free)\n2. Split PDF by pages: https://www.ilovepdf.com/split_pdf (free)\n3. Export CSV from your bank instead — way smaller + faster\n4. Re-screenshot at lower resolution if it's an image`);
-    return;
+    if (kind === 'image') {
+      // Auto-compress oversized images before sending
+      setProgress(`📐 Image is ${(file.size/1024/1024).toFixed(1)}MB — compressing to under 5MB...`);
+      try {
+        file = await compressImage(file, 5 * 1024 * 1024);
+        setProgress(`✅ Compressed to ${(file.size/1024/1024).toFixed(1)}MB`);
+      } catch (e) {
+        setProgress('');
+        return alert(`❌ Couldn't compress image: ${e.message}\n\nTry:\n1. Screenshot at lower resolution\n2. Use Windows Snipping Tool instead of phone camera\n3. Use https://tinypng.com to compress first`);
+      }
+    } else {
+      const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+      const maxMB = (maxBytes / 1024 / 1024).toFixed(0);
+      setProgress('');
+      alert(`❌ PDF too large: ${sizeMB}MB (max ${maxMB}MB).\n\nOptions:\n1. Compress at https://www.ilovepdf.com/compress_pdf\n2. Split pages at https://www.ilovepdf.com/split_pdf\n3. Export CSV from your bank — way smaller`);
+      return;
+    }
   }
 
   setProgress('📷 Reading file...');
@@ -3046,6 +3059,53 @@ function initDropZone() {
 // Also prevent default browser behaviour for drops outside the zone
 window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => e.preventDefault());
+
+// v1.42b: Auto-compress large images to fit under API limit
+async function compressImage(file, maxBytes) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => { img.src = e.target.result; };
+    reader.onerror = () => reject(new Error('Read failed'));
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      // Start at original size, scale down if too big
+      let scale = 1.0;
+      let quality = 0.9;
+      const tryCompress = () => {
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; // white bg for transparency
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (!blob) { reject(new Error('Compress failed')); return; }
+          if (blob.size <= maxBytes) {
+            // Good — return as File
+            const compressed = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+            resolve(compressed);
+          } else {
+            // Still too big — drop quality first, then scale
+            if (quality > 0.4) {
+              quality -= 0.15;
+              tryCompress();
+            } else if (scale > 0.3) {
+              quality = 0.85;
+              scale *= 0.8;
+              tryCompress();
+            } else {
+              reject(new Error('Could not compress enough'));
+            }
+          }
+        }, 'image/jpeg', quality);
+      };
+      tryCompress();
+    };
+    img.onerror = () => reject(new Error('Image decode failed'));
+    reader.readAsDataURL(file);
+  });
+}
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
