@@ -704,11 +704,15 @@
     </div>
 
     <div class="form-card">
-      <h3>📥 Import Statement</h3>
-      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Upload CSV, PDF, screenshot or photo of a bank statement. PDFs & images need a Claude API key (Settings → Smart AI).</p>
-      <input type="file" id="csvFile" accept=".csv,.tsv,.txt,.tab,.xlsx,.xls,.ods,.pdf,.htm,.html,image/*,.heic,.heif" onchange="importStatement(event)" style="display: none;">
-      <button class="btn btn-primary" onclick="document.getElementById('csvFile').click()" style="width: 100%;">📂 Choose File (any format)</button>
-      <div id="importProgress" style="margin-top: 10px; font-size: 0.85rem; color: var(--text-muted); display: none;"></div>
+      <h3>📥 Import Statements</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Select <strong>one or many</strong> files at once — any mix of CSV, Excel, PDF, screenshots. They'll be processed in order. PDFs & images need a Claude API key.</p>
+      <input type="file" id="csvFile" accept=".csv,.tsv,.txt,.tab,.xlsx,.xls,.ods,.pdf,.htm,.html,image/*,.heic,.heif" onchange="importStatement(event)" multiple style="display: none;">
+      <div id="dropZone" style="border: 2px dashed var(--border); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s;" onclick="document.getElementById('csvFile').click()">
+        <div style="font-size: 2rem; margin-bottom: 6px;">📂</div>
+        <div style="font-weight: 700; margin-bottom: 4px;">Drop files here or click to choose</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);">CSV · Excel · PDF · Screenshots · Photos — multiple at once</div>
+      </div>
+      <div id="importProgress" style="margin-top: 10px; font-size: 0.85rem; color: var(--text-muted); display: none; padding: 10px; background: var(--bg-soft); border-radius: 8px;"></div>
     </div>
 
     <div class="form-card">
@@ -2446,10 +2450,63 @@ function findHeaderRow(lines, delim) {
   return 0; // fallback to first line
 }
 
-// v1.29: Universal entry point — dispatches based on file type
+// v1.30: Multi-file entry point — loops through all selected files
 async function importStatement(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
+
+  if (files.length === 1) {
+    // Single file path — preserve original behaviour
+    return importOneFile(files[0]);
+  }
+
+  // Multi-file path — process sequentially with combined progress
+  const progress = document.getElementById('importProgress');
+  const setProgress = (msg) => { if (progress) { progress.style.display = 'block'; progress.innerHTML = msg; } };
+
+  let totalImported = 0;
+  let totalSkipped = 0;
+  const results = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    setProgress(`📦 Processing file <strong>${i + 1}</strong> of ${files.length}: <code>${file.name}</code>...<br><br>${results.map(r => `${r.ok ? '✅' : '❌'} ${r.name} — ${r.msg}`).join('<br>')}`);
+    try {
+      const result = await importOneFileQuiet(file);
+      results.push({ name: file.name, ok: true, msg: result });
+      totalImported += parseInt(result) || 0;
+    } catch (e) {
+      results.push({ name: file.name, ok: false, msg: e.message || 'failed' });
+      totalSkipped++;
+    }
+  }
+
+  setProgress('');
+  const successCount = results.filter(r => r.ok).length;
+  alert(`📦 Multi-file import done\n\n✅ ${successCount} of ${files.length} files succeeded\n📊 ${totalImported} transactions imported total\n\n${results.map(r => `${r.ok ? '✅' : '❌'} ${r.name}: ${r.msg}`).join('\n')}`);
+}
+
+// Wrapper that returns a promise resolving with imported count (for multi-file mode)
+async function importOneFileQuiet(file) {
+  // Fake event format the existing handlers expect
+  const fakeEvent = { target: { files: [file] } };
+  const before = txns.length + income.length;
+  // Suppress the per-file alert by temporarily replacing
+  const origAlert = window.alert;
+  let captured = '';
+  window.alert = (msg) => { captured = msg; };
+  try {
+    await importOneFile(file);
+  } finally {
+    window.alert = origAlert;
+  }
+  const added = (txns.length + income.length) - before;
+  if (added === 0 && captured.includes('❌')) throw new Error(captured.split('\n')[0]);
+  return `${added} txns`;
+}
+
+async function importOneFile(file) {
+  const fakeEvent = { target: { files: [file] } };
   const name = file.name.toLowerCase();
   const isCSV = /\.(csv|tsv|tab|txt)$/i.test(name) || file.type === 'text/csv';
   const isExcel = /\.(xlsx|xls|ods)$/i.test(name) || /(spreadsheet|excel)/i.test(file.type);
@@ -2457,7 +2514,7 @@ async function importStatement(event) {
   const isPDF = name.endsWith('.pdf') || file.type === 'application/pdf';
   const isImage = file.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|heic|heif|bmp|tiff?)$/i.test(name);
 
-  if (isCSV) return importCSV(event);
+  if (isCSV) return importCSV(fakeEvent);
   if (isExcel) return importExcel(file);
   if (isHTML) return importHTML(file);
   if (isPDF || isImage) {
@@ -2660,6 +2717,32 @@ Output ONLY the JSON array. No text before or after.`,
     alert(`❌ Network error: ${e.message}`);
   }
 }
+
+// v1.30: Drag-and-drop support for the upload zone
+function initDropZone() {
+  const zone = document.getElementById('dropZone');
+  if (!zone || zone.dataset.bound) return;
+  zone.dataset.bound = '1';
+  const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
+  ['dragenter', 'dragover'].forEach((ev) => zone.addEventListener(ev, (e) => {
+    stop(e);
+    zone.style.borderColor = 'var(--accent)';
+    zone.style.background = 'rgba(102,126,234,0.05)';
+  }));
+  ['dragleave', 'drop'].forEach((ev) => zone.addEventListener(ev, (e) => {
+    stop(e);
+    zone.style.borderColor = '';
+    zone.style.background = '';
+  }));
+  zone.addEventListener('drop', (e) => {
+    const files = Array.from(e.dataTransfer.files || []);
+    if (!files.length) return;
+    importStatement({ target: { files } });
+  });
+}
+// Also prevent default browser behaviour for drops outside the zone
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => e.preventDefault());
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -5579,6 +5662,8 @@ function render() {
 
   // v1.10 polish
   if (document.getElementById('netWorthHistoryChart')) renderNetWorthHistory();
+  // v1.30 drag-drop zone
+  initDropZone();
   // v1.14 context UI
   if (document.getElementById('accountTypeList')) renderAccountTypeList();
   // v1.16 license status
