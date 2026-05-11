@@ -376,6 +376,12 @@
       <div id="paydayContent"></div>
     </div>
 
+    <!-- Period stats: today, week, month, year-to-date -->
+    <div class="form-card" style="margin-bottom: 24px;">
+      <h3>📅 Spending by Period</h3>
+      <div id="periodStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;"></div>
+    </div>
+
     <!-- Hero spend number -->
     <div class="hero-card" id="heroCard">
       <div class="label">This Week</div>
@@ -2048,6 +2054,65 @@ function setAccountType(account, type) {
   save();
   showToast(`${account} → ${type === 'personal' ? '🏠 Personal' : '🏢 Business'}`);
   render();
+}
+
+// v1.31: Period stats — today, this week, MTD, YTD with income comparison
+function renderPeriodStats() {
+  const el = document.getElementById('periodStats');
+  if (!el) return;
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+
+  // Week start (Monday)
+  const monday = new Date(today);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const weekStart = monday.toISOString().split('T')[0];
+
+  // Month start
+  const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+
+  // Year start
+  const yearStart = `${today.getFullYear()}-01-01`;
+
+  const sumPeriod = (arr, from) => arr.filter(t => t.date >= from && t.date <= todayStr).reduce((s, t) => s + t.amount, 0);
+
+  const periods = [
+    { label: 'Today', emoji: '☀️', spent: sumPeriod(txns, todayStr), income: sumPeriod(income, todayStr), color: '#667eea' },
+    { label: 'This Week', emoji: '📆', spent: sumPeriod(txns, weekStart), income: sumPeriod(income, weekStart), color: '#43e97b', from: weekStart },
+    { label: 'Month-to-Date', emoji: '🗓️', spent: sumPeriod(txns, monthStart), income: sumPeriod(income, monthStart), color: '#f6a93b', from: monthStart },
+    { label: 'Year-to-Date', emoji: '📊', spent: sumPeriod(txns, yearStart), income: sumPeriod(income, yearStart), color: '#764ba2', from: yearStart },
+  ];
+
+  const sym = currencySymbol();
+  el.innerHTML = periods.map(p => {
+    const net = p.income - p.spent;
+    const netColor = net >= 0 ? 'var(--success)' : 'var(--danger)';
+    return `
+      <div style="background: var(--bg-soft); padding: 16px; border-radius: 12px; border-left: 4px solid ${p.color}; cursor: pointer;" onclick="${p.from ? `drillIntoPeriod('${p.from}', '${p.label}')` : ''}">
+        <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">${p.emoji} ${p.label}</div>
+        <div style="font-size: 1.7rem; font-weight: 800; color: var(--text); line-height: 1.1;">${sym}${p.spent.toLocaleString('en-IE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px;">spent</div>
+        ${p.income > 0 ? `
+          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
+            <span style="color: var(--text-muted);">in: ${sym}${p.income.toFixed(2)}</span>
+            <span style="color: ${netColor}; font-weight: 700;">net ${net >= 0 ? '+' : ''}${sym}${Math.abs(net).toFixed(2)}</span>
+          </div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function drillIntoPeriod(fromDate, label) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.emoji-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('transactions').classList.add('active');
+  const navBtns = document.querySelectorAll('.emoji-nav button');
+  if (navBtns[4]) navBtns[4].classList.add('active');
+  populateTxFilterDropdowns();
+  document.getElementById('txFrom').value = fromDate;
+  document.getElementById('txTo').value = new Date().toISOString().split('T')[0];
+  document.getElementById('txSort').value = 'date-desc';
+  renderAllTransactions();
+  window.scrollTo(0, 0);
 }
 
 function renderSplitView() {
@@ -5686,6 +5751,8 @@ function render() {
   const aiModelInput = document.getElementById('anthropicModel');
   if (aiKeyInput && document.activeElement !== aiKeyInput) aiKeyInput.value = anthropicKey;
   if (aiModelInput && document.activeElement !== aiModelInput) aiModelInput.value = anthropicModel;
+  // v1.31 period stats
+  if (document.getElementById('periodStats')) renderPeriodStats();
   // v1.15 split view (only in all mode — uses _origTxns since txns may be filtered)
   if (document.getElementById('splitView')) {
     const _t = txns; const _i = income;
