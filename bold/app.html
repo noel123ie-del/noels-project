@@ -2759,15 +2759,18 @@ Output ONLY the JSON array. No text before or after.`,
       return alert('❌ AI found no transactions in this file. Try a clearer image or a different page.');
     }
 
-    let imported = 0;
+    let imported = 0, duplicates = 0;
     parsed.forEach((t) => {
       if (!t.date || !t.desc || !t.amount) return;
-      const id = Date.now() + Math.random();
       const account = 'AIB Personal';
+      const candidate = { date: t.date, amount: Math.abs(t.amount), desc: t.desc };
+      const existingArr = t.isIncome ? income : txns;
+      if (isDuplicate(candidate, existingArr)) { duplicates++; return; }
+      const id = Date.now() + Math.random();
       if (t.isIncome) {
-        income.push({ id, date: t.date, amount: Math.abs(t.amount), desc: t.desc, account });
+        income.push({ id, ...candidate, account });
       } else {
-        txns.push({ id, date: t.date, amount: Math.abs(t.amount), category: t.category || 'Personal & Discretionary', desc: t.desc, account });
+        txns.push({ id, ...candidate, category: t.category || 'Personal & Discretionary', account });
       }
       imported++;
     });
@@ -2775,7 +2778,7 @@ Output ONLY the JSON array. No text before or after.`,
     save();
     render();
     setProgress('');
-    alert(`✅ Imported ${imported} transactions from your ${kind}!\n\n(Claude found ${parsed.length} entries · ${parsed.length - imported} skipped due to missing fields)`);
+    alert(`✅ Imported ${imported} new transactions from your ${kind}!\n\n(Claude found ${parsed.length} entries · ${duplicates} already existed · ${parsed.length - imported - duplicates} skipped due to missing fields)`);
   } catch (e) {
     setProgress('');
     console.error(e);
@@ -2820,6 +2823,15 @@ function fileToBase64(file) {
     };
     reader.onerror = () => resolve(null);
     reader.readAsDataURL(file);
+  });
+}
+
+// v1.32: Duplicate detection — same date + amount + desc (case-insensitive) = duplicate
+function isDuplicate(newTx, existingArr) {
+  const newKey = `${newTx.date}|${(newTx.desc || '').toLowerCase().trim()}|${(+newTx.amount).toFixed(2)}`;
+  return existingArr.some(t => {
+    const key = `${t.date}|${(t.desc || '').toLowerCase().trim()}|${(+t.amount).toFixed(2)}`;
+    return key === newKey;
   });
 }
 
@@ -2919,11 +2931,16 @@ function importCSV(event) {
           }
         }
 
+        // v1.32 dedup — skip if same date+amount+desc already exists
+        const candidate = { date, amount: amountVal, desc };
+        const existingArr = isIncome ? income : txns;
+        if (isDuplicate(candidate, existingArr)) { log('duplicate'); continue; }
+
         const id = Date.now() + Math.random();
         if (isIncome) {
-          income.push({ id, date, amount: amountVal, desc, account: 'AIB Personal' });
+          income.push({ id, ...candidate, account: 'AIB Personal' });
         } else {
-          txns.push({ id, date, amount: amountVal, category: cat, desc, account: 'AIB Personal' });
+          txns.push({ id, ...candidate, category: cat, account: 'AIB Personal' });
         }
         imported++;
       }
@@ -2960,6 +2977,7 @@ function importCSV(event) {
         'no description': 'Rows with no description (usually blank rows)',
         'footer row': 'Footer rows (Total, Closing Balance, etc.)',
         'too few columns': 'Rows that are blank or malformed',
+        'duplicate': 'Already exists in your data (skipped to prevent duplicates)',
       };
 
       let msg = `✅ Imported ${imported} transactions`;
