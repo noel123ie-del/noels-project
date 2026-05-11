@@ -337,6 +337,7 @@
       <option value="all">🌐 All</option>
       <option value="personal">🏠 Personal</option>
       <option value="business">🏢 Business</option>
+      <option value="mortgage">🏡 Mortgage</option>
     </select>
     <button class="theme-toggle" id="installBtn" onclick="installPWA()" title="Install app" style="display:none;">📲</button>
     <button class="theme-toggle" onclick="startTour()" title="Take a tour" style="font-size:1.1rem;">❓</button>
@@ -767,6 +768,10 @@
         <div class="form-group">
           <label>🏢 Business weekly target</label>
           <input type="number" id="businessBudget" step="0.01" placeholder="0" oninput="saveContextBudgets()">
+        </div>
+        <div class="form-group">
+          <label>🏡 Mortgage weekly target</label>
+          <input type="number" id="mortgageBudget" step="0.01" placeholder="0" oninput="saveContextBudgets()">
         </div>
       </div>
     </div>
@@ -1234,6 +1239,7 @@ function detectAccountFromFilename(filename) {
   const n = (filename || '').toLowerCase();
   if (n.includes('boi') || n.includes('bank of ireland') || n.includes('bankofireland')) return 'Bank of Ireland';
   if (n.includes('aib') && (n.includes('business') || n.includes('biz'))) return 'AIB Business';
+  if (n.includes('mortgage') || n.includes('home loan') || n.includes('homeloan')) return 'Mortgage';
   if (n.includes('aib') && (n.includes('credit') || n.includes('cc'))) return 'AIB Credit Card';
   if (n.includes('aib')) return 'AIB Personal';
   if (n.includes('revolut')) return 'Revolut';
@@ -1258,8 +1264,10 @@ function ensureAccountExists(name) {
   if (!name) return;
   if (!accounts.includes(name)) {
     accounts.push(name);
-    // Auto-tag account type — only obvious business names go to business
-    accountTypes[name] = /\bbusiness\b|\bbiz\b/i.test(name) ? 'business' : 'personal';
+    // Auto-tag account type from name
+    if (/\bmortgage\b|\bhome.?loan\b/i.test(name)) accountTypes[name] = 'mortgage';
+    else if (/\bbusiness\b|\bbiz\b/i.test(name)) accountTypes[name] = 'business';
+    else accountTypes[name] = 'personal';
     save();
   }
 }
@@ -2190,7 +2198,8 @@ const defaultAccountTypes = {
 let accountTypes = JSON.parse(localStorage.getItem('accountTypes') || JSON.stringify(defaultAccountTypes));
 let activeContext = localStorage.getItem('activeContext') || 'all';
 // Per-context weekly budget (object keyed by 'personal'/'business')
-let contextBudgets = JSON.parse(localStorage.getItem('contextBudgets') || '{"personal": 1725, "business": 0}');
+let contextBudgets = JSON.parse(localStorage.getItem('contextBudgets') || '{"personal": 1725, "business": 0, "mortgage": 0}');
+if (typeof contextBudgets.mortgage === 'undefined') contextBudgets.mortgage = 0;
 
 function getAccountType(acc) { return accountTypes[acc] || defaultAccountTypes[acc] || 'personal'; }
 function inActiveContext(item) {
@@ -2210,7 +2219,8 @@ function setActiveContext() {
   if (!sel) return;
   activeContext = sel.value;
   localStorage.setItem('activeContext', activeContext);
-  showToast(`📊 ${activeContext === 'all' ? 'All accounts' : activeContext === 'personal' ? '🏠 Personal mode' : '🏢 Business mode'}`);
+  const ctxLabel = activeContext === 'all' ? 'All accounts' : activeContext === 'personal' ? '🏠 Personal mode' : activeContext === 'business' ? '🏢 Business mode' : '🏡 Mortgage mode';
+  showToast(`📊 ${ctxLabel}`);
   alertedThisSession = {}; // re-arm alerts for new context
   render();
 }
@@ -2226,6 +2236,7 @@ function renderAccountTypeList() {
         <select onchange="setAccountType('${a}', this.value)" style="padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text); cursor: pointer;">
           <option value="personal" ${type === 'personal' ? 'selected' : ''}>🏠 Personal</option>
           <option value="business" ${type === 'business' ? 'selected' : ''}>🏢 Business</option>
+          <option value="mortgage" ${type === 'mortgage' ? 'selected' : ''}>🏡 Mortgage</option>
         </select>
       </div>`;
   }).join('');
@@ -2234,6 +2245,8 @@ function renderAccountTypeList() {
   const bb = document.getElementById('businessBudget');
   if (pb && document.activeElement !== pb) pb.value = contextBudgets.personal || '';
   if (bb && document.activeElement !== bb) bb.value = contextBudgets.business || '';
+  const mb = document.getElementById('mortgageBudget');
+  if (mb && document.activeElement !== mb) mb.value = contextBudgets.mortgage || '';
 }
 
 function setAccountType(account, type) {
@@ -2344,13 +2357,15 @@ function renderSplitView() {
 function saveContextBudgets() {
   const pb = parseFloat(document.getElementById('personalBudget')?.value) || 0;
   const bb = parseFloat(document.getElementById('businessBudget')?.value) || 0;
+  const mb = parseFloat(document.getElementById('mortgageBudget')?.value) || 0;
   contextBudgets.personal = pb;
   contextBudgets.business = bb;
+  contextBudgets.mortgage = mb;
   save();
   if (activeContext !== 'all') render();
 }
 
-const categories = ['Groceries', 'Fuel & Transport', 'Utilities & Bills', 'Subscriptions', 'Eating Out & Coffee', 'Kids & Family', 'Health & Fitness', 'Personal & Discretionary'];
+const categories = ['Groceries', 'Fuel & Transport', 'Utilities & Bills', 'Subscriptions', 'Eating Out & Coffee', 'Kids & Family', 'Health & Fitness', 'Personal & Discretionary', 'Mortgage & Rent'];
 const accounts = ['AIB Personal', 'AIB Business', 'Revolut', 'Credit Union', 'Cash'];
 
 function save() {
@@ -2533,6 +2548,7 @@ const csvAutoCategories = {
   'Kids & Family': /school|creche|toy|kids|child|smyths|mothercare|babies|early.?learning|gymboree|tots|nursery|playschool/i,
   'Health & Fitness': /gym|pharmacy|doctor|medical|fitness|boots|hospital|clinic|dental|optician|specsavers|vision.?express|cvs|walgreens|holland.*barrett|mcCabes|dunaway|medicare|insurance.*health|peloton|crossfit|yoga|pilates/i,
   'Personal & Discretionary': /amazon|shop|store|clothing|primark|zara|h&m|penneys|next |asos|river.?island|topshop|debenhams|dunnes stores|argos|currys|harvey.?norman|ikea|home.?store|ebay|etsy|aliexpress|shein|temu|nike|adidas|sports.?direct|jd.?sports|footlocker|brown.?thomas|arnotts|amex|american.?express|visa.?payment|mastercard.*payment/i,
+  'Mortgage & Rent': /mortgage|rent\b|landlord|housing|property tax|home loan|haven|kbc.*loan|aib.*loan|boi.*loan|ulster.*loan|ptsb.*loan/i,
 };
 
 // Universal CSV line parser — handles any delimiter and quoted fields
@@ -3462,6 +3478,7 @@ const categoryEmojis = {
   'Kids & Family': '👶',
   'Health & Fitness': '💪',
   'Personal & Discretionary': '🛍️',
+  'Mortgage & Rent': '🏡',
 };
 function renderCatPicker() {
   const picker = document.getElementById('catPicker');
