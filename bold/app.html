@@ -28,6 +28,8 @@
   <meta name="apple-mobile-web-app-title" content="Thrift">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script>if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';</script>
   <script src="https://cdn.plaid.com/link/v3/stable/link-initialize.js"></script>
   <style>
     /* ===== v1.7 Theme variables ===== */
@@ -2907,8 +2909,20 @@ async function importViaAI(file, kind) {
       return alert(`❌ Couldn't compress image: ${e.message}`);
     }
   }
-  if (kind === 'pdf' && file.size > 30 * 1024 * 1024) {
-    setProgress(`⚠️ Large PDF (${(file.size/1024/1024).toFixed(1)}MB) — trying upload...`);
+  // v1.45: For large PDFs, split into per-page images using pdf.js
+  // Threshold: 28MB (safely under Anthropic's 32MB cap) OR force splitting if you want.
+  const PDF_SPLIT_THRESHOLD = 28 * 1024 * 1024;
+  if (kind === 'pdf' && file.size > PDF_SPLIT_THRESHOLD) {
+    setProgress(`📑 Large PDF (${(file.size/1024/1024).toFixed(1)}MB) — splitting into page images...`);
+    try {
+      const pages = await pdfToPageImages(file, (msg) => setProgress(`📑 ${msg}`));
+      setProgress(`✅ Split into ${pages.length} pages. Processing each...`);
+      return await processPdfPages(pages, file.name);
+    } catch (e) {
+      setProgress('');
+      console.error(e);
+      return alert(`❌ Couldn't split PDF: ${e.message}\n\nTry exporting as CSV from your bank instead.`);
+    }
   }
 
   setProgress('📷 Reading file...');
@@ -3053,6 +3067,121 @@ function initDropZone() {
 // Also prevent default browser behaviour for drops outside the zone
 window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => e.preventDefault());
+
+// v1.45: Process an array of page-images and aggregate transactions
+async function processPdfPages(pages, originalFilename) {
+  const progress = document.getElementById('importProgress');
+  const setProgress = (msg) => { if (progress) { progress.style.display = 'block'; progress.textContent = msg; } };
+  if (!anthropicKey) { setProgress(''); alert('🔑 Need API key'); return; }
+
+  const account = detectAccountFromFilename(originalFilename) || 'AIB Personal';
+  ensureAccountExists(account);
+  const batchId = 'batch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  snapshotForUndo(`Import ${originalFilename} (${pages.length} pages)`);
+
+  let totalImported = 0;
+  let totalDuplicates = 0;
+  let totalFound = 0;
+  let pagesFailed = 0;
+
+  for (let i = 0; i < pages.length; i++) {
+    setProgress(`🤖 Processing page ${i + 1} of ${pages.length}... (imported so far: ${totalImported})`);
+    const pageFile = pages[i];
+    const base64 = await fileToBase64(pageFile);
+    if (!base64) { pagesFailed++; continue; }
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': anthropicKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 4096,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+              { type: 'text', text: `Extract every transaction from this bank statement page. Return ONLY a JSON array (no markdown, no commentary). If no transactions, return []. Each: {"date":"YYYY-MM-DD","desc":"merchant","amount":number,"isIncome":boolean,"category":"one of: Groceries, Fuel & Transport, Utilities & Bills, Subscriptions, Eating Out & Coffee, Kids & Family, Health & Fitness, Personal & Discretionary, Mortgage & Rent"}. amount always positive; use isIncome for direction.` },
+            ],
+          }],
+        }),
+      });
+
+      if (!res.ok) { pagesFailed++; console.error('Page', i + 1, 'failed:', await res.text()); continue; }
+      const data = await res.json();
+      const text = data.content?.[0]?.text || '[]';
+      let jsonStr = text.trim();
+      const arrayMatch = jsonStr.match(/\[\s*\{[\s\S]*\}\s*\]|\[\s*\]/);
+      if (arrayMatch) jsonStr = arrayMatch[0];
+      let parsed;
+      try { parsed = JSON.parse(jsonStr); } catch (e) { pagesFailed++; continue; }
+      if (!Array.isArray(parsed)) continue;
+
+      parsed.forEach((t) => {
+        totalFound++;
+        if (!t.date || !t.desc || !t.amount) return;
+        const candidate = { date: t.date, amount: Math.abs(t.amount), desc: t.desc };
+        const existingArr = t.isIncome ? income : txns;
+        if (isDuplicate(candidate, existingArr)) { totalDuplicates++; return; }
+        const id = Date.now() + Math.random();
+        if (t.isIncome) {
+          income.push({ id, ...candidate, account, _batchId: batchId, _source: originalFilename });
+        } else {
+          txns.push({ id, ...candidate, category: t.category || 'Personal & Discretionary', account, _batchId: batchId, _source: originalFilename });
+        }
+        totalImported++;
+      });
+    } catch (e) {
+      pagesFailed++;
+      console.error('Page', i + 1, 'exception:', e);
+    }
+  }
+
+  if (totalImported > 0) {
+    importBatches.unshift({ id: batchId, filename: originalFilename, count: totalImported, source: 'pdf', when: new Date().toISOString() });
+    if (importBatches.length > 100) importBatches = importBatches.slice(0, 100);
+    localStorage.setItem('importBatches', JSON.stringify(importBatches));
+  }
+  save();
+  render();
+  setProgress('');
+  alert(`✅ Imported ${totalImported} transactions from ${pages.length}-page PDF into "${account}"!\n\n• Pages processed: ${pages.length - pagesFailed} / ${pages.length}\n• Total found: ${totalFound}\n• Duplicates skipped: ${totalDuplicates}\n• Page errors: ${pagesFailed}`);
+}
+
+// v1.45: PDF → array of JPEG page images using pdf.js
+// Handles ANY size PDF — each page becomes its own JPEG sent to Claude separately.
+async function pdfToPageImages(file, onProgress) {
+  if (typeof pdfjsLib === 'undefined') throw new Error('pdf.js not loaded');
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pages = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    if (onProgress) onProgress(`Rendering page ${i} of ${pdf.numPages}...`);
+    const page = await pdf.getPage(i);
+    // Render at 1.5x scale for clarity but small file size
+    const viewport = page.getViewport({ scale: 1.5 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    // Convert to JPEG
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    const pageFile = new File([blob], `page-${i}.jpg`, { type: 'image/jpeg' });
+    // Ensure under 5MB — compress further if needed
+    let finalFile = pageFile;
+    if (pageFile.size > 5 * 1024 * 1024) {
+      finalFile = await compressImage(pageFile, 5 * 1024 * 1024);
+    }
+    pages.push(finalFile);
+  }
+  return pages;
+}
 
 // v1.42b: Auto-compress large images to fit under API limit
 async function compressImage(file, maxBytes) {
