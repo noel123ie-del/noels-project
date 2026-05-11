@@ -443,6 +443,19 @@
       <div class="stat-card primary"><div class="stat-label">Net</div><div class="stat-value" id="txNet">€0</div></div>
     </div>
 
+    <!-- In/Out big toggle -->
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px;">
+      <button onclick="setInOutFilter('all')" id="ioAll" class="io-btn active" style="background: linear-gradient(135deg, var(--accent), var(--accent-2)); color:white; border:none; padding:18px; border-radius:14px; cursor:pointer; font-weight:800; font-size:1rem; display:flex; flex-direction:column; align-items:center; gap:4px;">
+        <span style="font-size:1.5rem;">🌐</span><span>All</span>
+      </button>
+      <button onclick="setInOutFilter('out')" id="ioOut" class="io-btn" style="background:var(--bg-card); color:var(--text); border:2px solid var(--border); padding:18px; border-radius:14px; cursor:pointer; font-weight:800; font-size:1rem; display:flex; flex-direction:column; align-items:center; gap:4px;">
+        <span style="font-size:1.5rem;">💸</span><span>Outgoing</span>
+      </button>
+      <button onclick="setInOutFilter('in')" id="ioIn" class="io-btn" style="background:var(--bg-card); color:var(--text); border:2px solid var(--border); padding:18px; border-radius:14px; cursor:pointer; font-weight:800; font-size:1rem; display:flex; flex-direction:column; align-items:center; gap:4px;">
+        <span style="font-size:1.5rem;">💰</span><span>Incoming</span>
+      </button>
+    </div>
+
     <!-- Quick chips -->
     <div class="form-card">
       <h3>⚡ Quick Filters</h3>
@@ -5540,6 +5553,36 @@ function drillIntoDate(dateStr) {
   document.querySelectorAll('#quickChips .chip').forEach(c => c.classList.remove('active'));
   renderAllTransactions();
   window.scrollTo(0, 0);
+}
+
+// v1.36: In/Out big toggle at top of Stats
+function setInOutFilter(mode) {
+  // Sync the existing type dropdown so all logic still works
+  const typeSel = document.getElementById('txType');
+  if (typeSel) typeSel.value = mode;
+  // Visual: highlight active button
+  ['ioAll', 'ioOut', 'ioIn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('active');
+    el.style.background = 'var(--bg-card)';
+    el.style.color = 'var(--text)';
+    el.style.border = '2px solid var(--border)';
+  });
+  const activeId = mode === 'all' ? 'ioAll' : mode === 'out' ? 'ioOut' : 'ioIn';
+  const activeEl = document.getElementById(activeId);
+  if (activeEl) {
+    activeEl.classList.add('active');
+    const gradient = mode === 'out'
+      ? 'linear-gradient(135deg, #ff5e5e, #c0392b)'
+      : mode === 'in'
+        ? 'linear-gradient(135deg, #43e97b, #27ae60)'
+        : 'linear-gradient(135deg, var(--accent), var(--accent-2))';
+    activeEl.style.background = gradient;
+    activeEl.style.color = 'white';
+    activeEl.style.border = 'none';
+  }
+  renderAllTransactions();
 }
 
 // ====== v1.5 Quick chips ======
