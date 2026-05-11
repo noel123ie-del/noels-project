@@ -27,6 +27,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Thrift">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.plaid.com/link/v3/stable/link-initialize.js"></script>
   <style>
     /* ===== v1.7 Theme variables ===== */
@@ -705,8 +706,8 @@
     <div class="form-card">
       <h3>📥 Import Statement</h3>
       <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Upload CSV, PDF, screenshot or photo of a bank statement. PDFs & images need a Claude API key (Settings → Smart AI).</p>
-      <input type="file" id="csvFile" accept=".csv,.pdf,image/*" onchange="importStatement(event)" style="display: none;">
-      <button class="btn btn-primary" onclick="document.getElementById('csvFile').click()" style="width: 100%;">📂 Choose File (CSV / PDF / Image)</button>
+      <input type="file" id="csvFile" accept=".csv,.tsv,.txt,.tab,.xlsx,.xls,.ods,.pdf,.htm,.html,image/*,.heic,.heif" onchange="importStatement(event)" style="display: none;">
+      <button class="btn btn-primary" onclick="document.getElementById('csvFile').click()" style="width: 100%;">📂 Choose File (any format)</button>
       <div id="importProgress" style="margin-top: 10px; font-size: 0.85rem; color: var(--text-muted); display: none;"></div>
     </div>
 
@@ -2445,26 +2446,107 @@ function findHeaderRow(lines, delim) {
   return 0; // fallback to first line
 }
 
-// v1.28: Universal entry point — dispatches to CSV or AI-vision based on file type
+// v1.29: Universal entry point — dispatches based on file type
 async function importStatement(event) {
   const file = event.target.files[0];
   if (!file) return;
   const name = file.name.toLowerCase();
-  const isCSV = name.endsWith('.csv') || file.type === 'text/csv' || file.type === '' && name.endsWith('.csv');
+  const isCSV = /\.(csv|tsv|tab|txt)$/i.test(name) || file.type === 'text/csv';
+  const isExcel = /\.(xlsx|xls|ods)$/i.test(name) || /(spreadsheet|excel)/i.test(file.type);
+  const isHTML = /\.(htm|html)$/i.test(name) || file.type === 'text/html';
   const isPDF = name.endsWith('.pdf') || file.type === 'application/pdf';
-  const isImage = file.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|heic)$/i.test(name);
+  const isImage = file.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|heic|heif|bmp|tiff?)$/i.test(name);
 
-  if (isCSV) {
-    return importCSV(event); // existing path
-  }
+  if (isCSV) return importCSV(event);
+  if (isExcel) return importExcel(file);
+  if (isHTML) return importHTML(file);
   if (isPDF || isImage) {
     if (!anthropicKey) {
-      alert('🔑 PDF and image imports need a Claude API key.\n\nGo to Settings → 🧠 Smart AI and paste an Anthropic key from https://console.anthropic.com/settings/keys');
+      alert('🔑 PDF and image imports need a Claude API key.\n\nGo to Settings → 🧠 Smart AI and paste a key from https://console.anthropic.com/settings/keys\n\nOr export your statement as CSV/Excel for free local import.');
       return;
     }
     return importViaAI(file, isPDF ? 'pdf' : 'image');
   }
-  alert('❌ Unsupported file type. Use CSV, PDF, or an image (PNG/JPG).');
+  // Last resort — if AI key set, try vision on anything
+  if (anthropicKey) {
+    if (confirm(`Unknown file type. Try AI extraction anyway?\n\nFile: ${file.name}\nType: ${file.type || 'unknown'}`)) {
+      return importViaAI(file, 'image');
+    }
+  } else {
+    alert('❌ Unsupported file type: ' + (file.type || name.split('.').pop()) + '\n\nSupported: CSV, TSV, TXT, Excel (xlsx/xls), HTML, PDF, images (PNG/JPG/HEIC/etc).');
+  }
+}
+
+// Excel → convert to CSV via SheetJS, then reuse CSV parser
+async function importExcel(file) {
+  const progress = document.getElementById('importProgress');
+  const setProgress = (msg) => { if (progress) { progress.style.display = 'block'; progress.textContent = msg; } };
+  if (typeof XLSX === 'undefined') {
+    setProgress('');
+    return alert('❌ Excel library not loaded. Refresh the page and try again.');
+  }
+  try {
+    setProgress('📊 Reading Excel file...');
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    // Use first sheet (or one named like a statement)
+    let sheetName = workbook.SheetNames[0];
+    for (const s of workbook.SheetNames) {
+      if (/transaction|statement|account|history/i.test(s)) { sheetName = s; break; }
+    }
+    const sheet = workbook.Sheets[sheetName];
+    const csvText = XLSX.utils.sheet_to_csv(sheet);
+    setProgress('');
+    // Fake an event for the CSV parser
+    importCSV({ target: { files: [new File([csvText], file.name.replace(/\.[^.]+$/, '.csv'), { type: 'text/csv' })] } });
+  } catch (e) {
+    setProgress('');
+    console.error(e);
+    alert('❌ Could not read Excel: ' + e.message);
+  }
+}
+
+// HTML → strip tags, try CSV; if no luck, send to AI
+async function importHTML(file) {
+  const progress = document.getElementById('importProgress');
+  const setProgress = (msg) => { if (progress) { progress.style.display = 'block'; progress.textContent = msg; } };
+  try {
+    setProgress('🌐 Reading HTML...');
+    const html = await file.text();
+    // Try parsing as a table-based HTML statement
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const tables = doc.querySelectorAll('table');
+    if (tables.length > 0) {
+      // Convert first sensible table to CSV
+      let bestTable = tables[0];
+      let bestRows = 0;
+      tables.forEach((t) => {
+        const r = t.querySelectorAll('tr').length;
+        if (r > bestRows) { bestRows = r; bestTable = t; }
+      });
+      const rows = [];
+      bestTable.querySelectorAll('tr').forEach((tr) => {
+        const cells = [];
+        tr.querySelectorAll('th, td').forEach((c) => cells.push((c.textContent || '').trim().replace(/"/g, '""')));
+        if (cells.length) rows.push(cells.map(c => `"${c}"`).join(','));
+      });
+      const csvText = rows.join('\n');
+      setProgress('');
+      importCSV({ target: { files: [new File([csvText], 'extracted.csv', { type: 'text/csv' })] } });
+      return;
+    }
+    // No table — fall back to AI if available
+    if (anthropicKey) {
+      setProgress('🤖 No table found. Sending to AI...');
+      return importViaAI(file, 'pdf'); // treat as document
+    }
+    setProgress('');
+    alert('❌ No transaction table found in HTML. Try saving statement as PDF or CSV.');
+  } catch (e) {
+    setProgress('');
+    alert('❌ Could not read HTML: ' + e.message);
+  }
 }
 
 async function importViaAI(file, kind) {
