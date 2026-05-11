@@ -981,7 +981,13 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
     </div>
 
     <div class="form-card">
-      <h3>⏪ Undo Recent Deletions</h3>
+      <h3>↩️ Undo Recent Actions</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.85rem;">Last 15 changes — edits, deletes, imports. Click Undo on any.</p>
+      <div id="undoHistory"></div>
+    </div>
+
+    <div class="form-card">
+      <h3>⏪ Undo Recent Deletions (Trash)</h3>
       <div id="trashList"></div>
     </div>
 
@@ -1706,6 +1712,90 @@ function importFullBackup(e) {
   reader.readAsText(file);
 }
 
+// v1.39: Universal undo stack — snapshot full state before destructive actions
+let undoStack = JSON.parse(sessionStorage.getItem('undoStack') || '[]');
+
+function snapshotForUndo(label) {
+  const snapshot = {
+    id: Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    label,
+    when: new Date().toISOString(),
+    state: {
+      txns: JSON.parse(JSON.stringify(txns)),
+      income: JSON.parse(JSON.stringify(income)),
+      catBudgets: JSON.parse(JSON.stringify(catBudgets)),
+      weeklyBudget,
+      goals: JSON.parse(JSON.stringify(goals)),
+      assets: JSON.parse(JSON.stringify(assets)),
+      liabilities: JSON.parse(JSON.stringify(liabilities)),
+      pots: JSON.parse(JSON.stringify(pots)),
+      userCategoryRules: JSON.parse(JSON.stringify(userCategoryRules)),
+      accountTypes: JSON.parse(JSON.stringify(accountTypes)),
+      contextBudgets: JSON.parse(JSON.stringify(contextBudgets)),
+      saveRules: JSON.parse(JSON.stringify(saveRules)),
+      importBatches: JSON.parse(JSON.stringify(importBatches || [])),
+    },
+  };
+  undoStack.push(snapshot);
+  if (undoStack.length > 15) undoStack = undoStack.slice(-15); // keep last 15
+  try { sessionStorage.setItem('undoStack', JSON.stringify(undoStack)); } catch (e) { /* quota — drop oldest */ undoStack = undoStack.slice(-5); }
+  showUndoToast(label, snapshot.id);
+}
+
+function showUndoToast(label, snapshotId) {
+  // Show a transient toast with Undo button
+  let toast = document.getElementById('_undoToast');
+  if (toast) toast.remove();
+  toast = document.createElement('div');
+  toast.id = '_undoToast';
+  toast.style.cssText = 'position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#2c3e50; color:white; padding:12px 16px; border-radius:12px; font-weight:600; box-shadow:0 8px 24px rgba(0,0,0,0.3); z-index:9999; display:flex; align-items:center; gap:12px; max-width:90vw;';
+  toast.innerHTML = `<span>${label}</span><button onclick="undoLast('${snapshotId}')" style="background:white; color:#2c3e50; border:none; padding:6px 14px; border-radius:8px; cursor:pointer; font-weight:800;">↩️ Undo</button><button onclick="document.getElementById('_undoToast').remove()" style="background:none; color:white; border:none; cursor:pointer; font-size:1.2rem; padding:0 4px;">×</button>`;
+  document.body.appendChild(toast);
+  setTimeout(() => { if (toast === document.getElementById('_undoToast')) toast.remove(); }, 8000);
+}
+
+function undoLast(snapshotId) {
+  let snap;
+  if (snapshotId) {
+    snap = undoStack.find(s => s.id === snapshotId);
+  } else {
+    snap = undoStack[undoStack.length - 1];
+  }
+  if (!snap) { showToast('Nothing to undo'); return; }
+  // Restore state
+  const s = snap.state;
+  txns = s.txns; income = s.income; catBudgets = s.catBudgets; weeklyBudget = s.weeklyBudget;
+  goals = s.goals; assets = s.assets; liabilities = s.liabilities; pots = s.pots;
+  userCategoryRules = s.userCategoryRules; accountTypes = s.accountTypes;
+  contextBudgets = s.contextBudgets; saveRules = s.saveRules;
+  if (s.importBatches) { importBatches = s.importBatches; localStorage.setItem('importBatches', JSON.stringify(importBatches)); }
+  // Remove this snapshot from stack
+  undoStack = undoStack.filter(x => x.id !== snap.id);
+  try { sessionStorage.setItem('undoStack', JSON.stringify(undoStack)); } catch (e) {}
+  save();
+  render();
+  showToast(`↩️ Undone: ${snap.label}`);
+  const toast = document.getElementById('_undoToast');
+  if (toast) toast.remove();
+}
+
+function renderUndoHistory() {
+  const el = document.getElementById('undoHistory');
+  if (!el) return;
+  if (!undoStack.length) {
+    el.innerHTML = '<div class="empty-state"><div class="illust">↩️</div><div class="title">Nothing to undo yet</div><div class="hint">Edits, deletes, imports and other actions appear here for undo.</div></div>';
+    return;
+  }
+  el.innerHTML = [...undoStack].reverse().map(s => `
+    <div style="background: var(--bg-soft); padding: 10px 12px; border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${s.label}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">${new Date(s.when).toLocaleTimeString()}</div>
+      </div>
+      <button class="btn btn-primary" onclick="undoLast('${s.id}')" style="padding: 6px 12px; font-size: 0.85rem;">↩️ Undo</button>
+    </div>`).join('');
+}
+
 // ===== v1.20 Undo (Trash) =====
 let trash = JSON.parse(localStorage.getItem('trash') || '[]');
 
@@ -1763,12 +1853,13 @@ function renderTrash() {
   }).join('') + `<button class="btn btn-primary" onclick="emptyTrash()" style="width:100%; margin-top: 8px; background: var(--danger);">🗑️ Empty trash</button>`;
 }
 
-// Wrap delete functions to move to trash
+// Wrap delete functions to snapshot + move to trash
 const _origDeleteTxn = deleteTxn;
 deleteTxn = function(id) {
   const txn = txns.find(t => t.id === id);
   if (!txn) return;
-  if (!confirm(`Delete "${txn.desc}"? You can undo for 20 most recent deletions.`)) return;
+  if (!confirm(`Delete "${txn.desc}"? You can undo this.`)) return;
+  snapshotForUndo(`Delete "${txn.desc}"`);
   moveToTrash(txn, 'txn');
   txns = txns.filter(t => t.id !== id);
   save();
@@ -1778,7 +1869,8 @@ const _origDeleteIncome = deleteIncome;
 deleteIncome = function(id) {
   const inc = income.find(i => i.id === id);
   if (!inc) return;
-  if (!confirm('Delete this income entry?')) return;
+  if (!confirm('Delete this income entry? You can undo.')) return;
+  snapshotForUndo(`Delete income "${inc.desc}"`);
   moveToTrash(inc, 'income');
   income = income.filter(i => i.id !== id);
   save();
@@ -2311,12 +2403,16 @@ function showToast(msg) {
 function editTxn(id) {
   const txn = txns.find(t => t.id === id);
   if (!txn) return;
+  // Snapshot for undo before any change
+  snapshotForUndo(`Edit "${txn.desc}"`);
+
   // Step 1: amount
   const newAmount = prompt(`Edit amount for "${txn.desc}":\n\nCurrent: €${txn.amount.toFixed(2)}`, txn.amount.toFixed(2));
-  if (newAmount === null || newAmount === '') return;
-  const amount = parseFloat(newAmount);
-  if (!amount || amount <= 0) return;
-  txn.amount = amount;
+  if (newAmount === null) return; // user cancelled — don't snapshot
+  if (newAmount !== '') {
+    const amount = parseFloat(newAmount);
+    if (amount && amount > 0) txn.amount = amount;
+  }
 
   // Step 2: optional category change
   const catList = categories.map((c, i) => `${i + 1}. ${c}`).join('\n');
@@ -2325,9 +2421,22 @@ function editTxn(id) {
     const idx = parseInt(choice.trim()) - 1;
     if (idx >= 0 && idx < categories.length) {
       const newCat = categories[idx];
+      const oldCat = txn.category;
       txn.category = newCat;
       learnCategoryRule(txn.desc, newCat);
-      showToast(`✅ Will categorise "${txn.desc}" as ${newCat} from now on`);
+
+      // BULK: check if other transactions have the same merchant name
+      const sameMerchant = txns.filter(t => t.id !== id && (t.desc || '').toLowerCase().trim() === (txn.desc || '').toLowerCase().trim() && t.category !== newCat);
+      if (sameMerchant.length > 0) {
+        if (confirm(`Found ${sameMerchant.length} other transaction${sameMerchant.length > 1 ? 's' : ''} with "${txn.desc}".\n\nApply ${newCat} category to all of them too?`)) {
+          sameMerchant.forEach(t => t.category = newCat);
+          showToast(`✅ Updated ${sameMerchant.length + 1} transactions to ${newCat}`);
+        } else {
+          showToast(`✅ This transaction → ${newCat}. Future imports will use this rule.`);
+        }
+      } else {
+        showToast(`✅ Will categorise "${txn.desc}" as ${newCat} from now on`);
+      }
     }
   }
 
@@ -2988,6 +3097,8 @@ function importCSV(event) {
 
       let imported = 0, skipped = 0, skipReasons = {};
       const __csvBatchId = 'batch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      // v1.39 snapshot pre-import for undo
+      snapshotForUndo(`Import ${file.name}`);
       const log = (reason) => { skipReasons[reason] = (skipReasons[reason] || 0) + 1; skipped++; };
 
       for (let i = headerIdx + 1; i < lines.length; i++) {
@@ -6042,6 +6153,8 @@ function render() {
   initDropZone();
   // v1.33 import history
   if (document.getElementById('importHistory')) renderImportHistory();
+  // v1.39 undo history
+  if (document.getElementById('undoHistory')) renderUndoHistory();
   // v1.14 context UI
   if (document.getElementById('accountTypeList')) renderAccountTypeList();
   // v1.16 license status
