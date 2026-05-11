@@ -2895,25 +2895,23 @@ async function importViaAI(file, kind) {
   const progress = document.getElementById('importProgress');
   const setProgress = (msg) => { if (progress) { progress.style.display = 'block'; progress.textContent = msg; } };
 
-  // PDFs go up to 25MB (Anthropic supports 32MB), images need 5MB
-  const maxBytes = kind === 'pdf' ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
-  if (file.size > maxBytes) {
-    if (kind === 'image') {
-      // Auto-compress oversized images before sending
-      setProgress(`📐 Image is ${(file.size/1024/1024).toFixed(1)}MB — compressing to under 5MB...`);
-      try {
-        file = await compressImage(file, 5 * 1024 * 1024);
-        setProgress(`✅ Compressed to ${(file.size/1024/1024).toFixed(1)}MB`);
-      } catch (e) {
-        setProgress('');
-        return alert(`❌ Couldn't compress image: ${e.message}\n\nTry:\n1. Screenshot at lower resolution\n2. Use Windows Snipping Tool instead of phone camera\n3. Use https://tinypng.com to compress first`);
-      }
-    } else {
-      const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-      const maxMB = (maxBytes / 1024 / 1024).toFixed(0);
+  // User-facing limit: 25MB for both. Internally, images must be ≤5MB for Anthropic, so we auto-compress.
+  const USER_LIMIT = 25 * 1024 * 1024;
+  const API_IMAGE_LIMIT = 5 * 1024 * 1024;
+  if (file.size > USER_LIMIT) {
+    const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+    setProgress('');
+    return alert(`❌ File too large: ${sizeMB}MB (max 25MB).\n\nOptions:\n1. Compress at https://www.ilovepdf.com/compress_pdf (PDFs)\n2. Use https://tinypng.com (images)\n3. Export CSV from your bank — way smaller`);
+  }
+  // For images > Anthropic's 5MB API cap, auto-compress
+  if (kind === 'image' && file.size > API_IMAGE_LIMIT) {
+    setProgress(`📐 Image is ${(file.size/1024/1024).toFixed(1)}MB — compressing for upload...`);
+    try {
+      file = await compressImage(file, API_IMAGE_LIMIT);
+      setProgress(`✅ Compressed to ${(file.size/1024/1024).toFixed(1)}MB`);
+    } catch (e) {
       setProgress('');
-      alert(`❌ PDF too large: ${sizeMB}MB (max ${maxMB}MB).\n\nOptions:\n1. Compress at https://www.ilovepdf.com/compress_pdf\n2. Split pages at https://www.ilovepdf.com/split_pdf\n3. Export CSV from your bank — way smaller`);
-      return;
+      return alert(`❌ Couldn't compress image: ${e.message}\n\nTry a lower-resolution screenshot.`);
     }
   }
 
