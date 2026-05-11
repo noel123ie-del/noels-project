@@ -1229,6 +1229,41 @@ function pickModelForQuestion(q) {
   return 'claude-sonnet-4-6';
 }
 
+// v1.40: Smart bank detection — infer account from filename
+function detectAccountFromFilename(filename) {
+  const n = (filename || '').toLowerCase();
+  if (n.includes('boi') || n.includes('bank of ireland') || n.includes('bankofireland')) return 'Bank of Ireland';
+  if (n.includes('aib') && (n.includes('business') || n.includes('biz'))) return 'AIB Business';
+  if (n.includes('aib') && (n.includes('credit') || n.includes('cc'))) return 'AIB Credit Card';
+  if (n.includes('aib')) return 'AIB Personal';
+  if (n.includes('revolut')) return 'Revolut';
+  if (n.includes('monzo')) return 'Monzo';
+  if (n.includes('starling')) return 'Starling';
+  if (n.includes('n26')) return 'N26';
+  if (n.includes('wise')) return 'Wise';
+  if (n.includes('paypal')) return 'PayPal';
+  if (n.includes('ptsb') || n.includes('permanent') && n.includes('tsb')) return 'PTSB';
+  if (n.includes('credit union') || n.includes('creditunion')) return 'Credit Union';
+  if (n.includes('hsbc')) return 'HSBC';
+  if (n.includes('santander')) return 'Santander';
+  if (n.includes('barclays')) return 'Barclays';
+  if (n.includes('chase')) return 'Chase';
+  if (n.includes('amex') || n.includes('american express')) return 'American Express';
+  if (n.includes('visa')) return 'Visa Card';
+  if (n.includes('mastercard') || n.includes('master card')) return 'Mastercard';
+  return null; // unknown — use default
+}
+
+function ensureAccountExists(name) {
+  if (!name) return;
+  if (!accounts.includes(name)) {
+    accounts.push(name);
+    // Auto-tag account type — only obvious business names go to business
+    accountTypes[name] = /\bbusiness\b|\bbiz\b/i.test(name) ? 'business' : 'personal';
+    save();
+  }
+}
+
 // v1.34: Chat history for conversation memory across turns
 let chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
 function pushChatTurn(role, content) {
@@ -2930,9 +2965,11 @@ Output ONLY the JSON array. No text before or after.`,
 
     let imported = 0, duplicates = 0;
     const batchId = 'batch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    // v1.40 auto-detect bank
+    const account = detectAccountFromFilename(file.name) || 'AIB Personal';
+    ensureAccountExists(account);
     parsed.forEach((t) => {
       if (!t.date || !t.desc || !t.amount) return;
-      const account = 'AIB Personal';
       const candidate = { date: t.date, amount: Math.abs(t.amount), desc: t.desc };
       const existingArr = t.isIncome ? income : txns;
       if (isDuplicate(candidate, existingArr)) { duplicates++; return; }
@@ -2956,7 +2993,7 @@ Output ONLY the JSON array. No text before or after.`,
     save();
     render();
     setProgress('');
-    alert(`✅ Imported ${imported} new transactions from your ${kind}!\n\n(Claude found ${parsed.length} entries · ${duplicates} already existed · ${parsed.length - imported - duplicates} skipped due to missing fields)`);
+    alert(`✅ Imported ${imported} new transactions from your ${kind} into account "${account}"!\n\n(Claude found ${parsed.length} entries · ${duplicates} already existed · ${parsed.length - imported - duplicates} skipped due to missing fields)`);
   } catch (e) {
     setProgress('');
     console.error(e);
@@ -3097,6 +3134,9 @@ function importCSV(event) {
 
       let imported = 0, skipped = 0, skipReasons = {};
       const __csvBatchId = 'batch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      // v1.40 auto-detect bank from filename
+      const detectedAccount = detectAccountFromFilename(file.name) || 'AIB Personal';
+      ensureAccountExists(detectedAccount);
       // v1.39 snapshot pre-import for undo
       snapshotForUndo(`Import ${file.name}`);
       const log = (reason) => { skipReasons[reason] = (skipReasons[reason] || 0) + 1; skipped++; };
@@ -3180,9 +3220,9 @@ function importCSV(event) {
 
         const id = Date.now() + Math.random();
         if (isIncome) {
-          income.push({ id, ...candidate, account: 'AIB Personal', _batchId: __csvBatchId, _source: file.name });
+          income.push({ id, ...candidate, account: detectedAccount, _batchId: __csvBatchId, _source: file.name });
         } else {
-          txns.push({ id, ...candidate, category: cat, account: 'AIB Personal', _batchId: __csvBatchId, _source: file.name });
+          txns.push({ id, ...candidate, category: cat, account: detectedAccount, _batchId: __csvBatchId, _source: file.name });
         }
         imported++;
       }
@@ -3230,7 +3270,7 @@ function importCSV(event) {
         localStorage.setItem('importBatches', JSON.stringify(importBatches));
       }
 
-      let msg = `✅ Imported ${imported} transactions`;
+      let msg = `✅ Imported ${imported} transactions into account "${detectedAccount}"`;
       if (skipped > 0) {
         msg += `\n\nℹ️ ${skipped} row${skipped===1?'':'s'} skipped — this is normal:\n`;
         for (const [reason, count] of Object.entries(skipReasons)) {
