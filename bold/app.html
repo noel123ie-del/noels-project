@@ -450,7 +450,10 @@
         <span class="chip" onclick="applyQuickChip('all')">All</span>
         <span class="chip" onclick="applyQuickChip('today')">Today</span>
         <span class="chip" onclick="applyQuickChip('week')">This Week</span>
+        <span class="chip" onclick="applyQuickChip('lastweek')">Last Week</span>
         <span class="chip" onclick="applyQuickChip('month')">This Month</span>
+        <span class="chip" onclick="applyQuickChip('lastmonth')">Last Month</span>
+        <span class="chip" onclick="applyQuickChip('year')">This Year</span>
         <span class="chip" onclick="applyQuickChip('over50')">Over €50</span>
         <span class="chip" onclick="applyQuickChip('over100')">Over €100</span>
         <span class="chip" onclick="applyQuickChip('out')">Spending only</span>
@@ -5556,10 +5559,26 @@ function applyQuickChip(filter) {
   const mondayStr = monday.toISOString().split('T')[0];
   const monthStart = today.slice(0, 7) + '-01';
 
+  const todayDate = new Date();
   switch (filter) {
     case 'today': document.getElementById('txFrom').value = today; document.getElementById('txTo').value = today; break;
     case 'week': document.getElementById('txFrom').value = mondayStr; document.getElementById('txTo').value = today; break;
+    case 'lastweek': {
+      const lastMon = new Date(monday); lastMon.setDate(lastMon.getDate() - 7);
+      const lastSun = new Date(monday); lastSun.setDate(lastSun.getDate() - 1);
+      document.getElementById('txFrom').value = lastMon.toISOString().split('T')[0];
+      document.getElementById('txTo').value = lastSun.toISOString().split('T')[0];
+      break;
+    }
     case 'month': document.getElementById('txFrom').value = monthStart; document.getElementById('txTo').value = today; break;
+    case 'lastmonth': {
+      const lm = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
+      const le = new Date(todayDate.getFullYear(), todayDate.getMonth(), 0);
+      document.getElementById('txFrom').value = lm.toISOString().split('T')[0];
+      document.getElementById('txTo').value = le.toISOString().split('T')[0];
+      break;
+    }
+    case 'year': document.getElementById('txFrom').value = `${todayDate.getFullYear()}-01-01`; document.getElementById('txTo').value = today; break;
     case 'over50': document.getElementById('txSort').value = 'amt-desc'; window._minAmount = 50; break;
     case 'over100': document.getElementById('txSort').value = 'amt-desc'; window._minAmount = 100; break;
     case 'out': document.getElementById('txType').value = 'out'; break;
