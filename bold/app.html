@@ -456,6 +456,13 @@
       </button>
     </div>
 
+    <!-- Sources summary -->
+    <div class="form-card">
+      <h3>📂 Imported Sources</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.85rem;">Click a source to filter just its transactions</p>
+      <div id="sourcesSummary"></div>
+    </div>
+
     <!-- Quick chips -->
     <div class="form-card">
       <h3>⚡ Quick Filters</h3>
@@ -483,6 +490,7 @@
         <div class="form-group"><label>Type</label><select id="txType" onchange="renderAllTransactions()"><option value="all">All</option><option value="out">Spending</option><option value="in">Income</option></select></div>
         <div class="form-group"><label>Category</label><select id="txCat" onchange="renderAllTransactions()"><option value="all">All categories</option></select></div>
         <div class="form-group"><label>Account</label><select id="txAcc" onchange="renderAllTransactions()"><option value="all">All accounts</option></select></div>
+        <div class="form-group"><label>Source file</label><select id="txSource" onchange="renderAllTransactions()"><option value="all">All sources</option></select></div>
         <div class="form-group"><label>From date</label><input type="date" id="txFrom" onchange="renderAllTransactions()"></div>
         <div class="form-group"><label>To date</label><input type="date" id="txTo" onchange="renderAllTransactions()"></div>
         <div class="form-group"><label>Sort</label><select id="txSort" onchange="renderAllTransactions()"><option value="date-desc">Newest first</option><option value="date-asc">Oldest first</option><option value="amt-desc">Highest amount</option><option value="amt-asc">Lowest amount</option></select></div>
@@ -5557,6 +5565,79 @@ function drillIntoDate(dateStr) {
   window.scrollTo(0, 0);
 }
 
+// v1.38: Sources summary on Stats — auto-grouped by source filename with smart icons
+function renderSourcesSummary() {
+  const el = document.getElementById('sourcesSummary');
+  if (!el) return;
+  // Group txns + income by _source
+  const sources = {};
+  const addTo = (t) => {
+    const key = t._source || 'Manual entry';
+    if (!sources[key]) sources[key] = { count: 0, total: 0, in: 0, out: 0 };
+    sources[key].count++;
+    if (t._isIncome) sources[key].in += t.amount;
+  };
+  txns.forEach(t => {
+    const key = t._source || 'Manual entry';
+    if (!sources[key]) sources[key] = { count: 0, total: 0, in: 0, out: 0 };
+    sources[key].count++;
+    sources[key].out += t.amount;
+    sources[key].total += t.amount;
+  });
+  income.forEach(i => {
+    const key = i._source || 'Manual entry';
+    if (!sources[key]) sources[key] = { count: 0, total: 0, in: 0, out: 0 };
+    sources[key].count++;
+    sources[key].in += i.amount;
+  });
+
+  if (Object.keys(sources).length === 0 || (Object.keys(sources).length === 1 && sources['Manual entry'])) {
+    el.innerHTML = '<div class="empty-state"><div class="illust">📂</div><div class="title">No imported sources yet</div><div class="hint">Upload bank statements in Settings to see them here.</div></div>';
+    return;
+  }
+
+  // Smart icon based on filename
+  const guessIcon = (name) => {
+    const n = name.toLowerCase();
+    if (n.includes('aib')) return '🟢';
+    if (n.includes('boi') || n.includes('bank of ireland')) return '🟡';
+    if (n.includes('revolut')) return '⚫';
+    if (n.includes('monzo')) return '🔶';
+    if (n.includes('starling')) return '🟣';
+    if (n.includes('credit') || n.includes('cc') || n.includes('visa') || n.includes('master')) return '💳';
+    if (n.includes('paypal')) return '🅿️';
+    if (n.includes('wise')) return '🌍';
+    if (/\.(pdf)$/i.test(name)) return '📕';
+    if (/\.(png|jpg|jpeg|gif|webp)$/i.test(name)) return '🖼️';
+    if (/\.(xls|xlsx|ods)$/i.test(name)) return '📊';
+    if (n === 'manual entry') return '✍️';
+    return '📄';
+  };
+
+  const sym = currencySymbol();
+  const sorted = Object.entries(sources).sort((a, b) => b[1].count - a[1].count);
+  el.innerHTML = sorted.map(([name, stats]) => {
+    const icon = guessIcon(name);
+    return `
+      <div style="background: var(--bg-soft); padding: 12px; border-radius: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer;" onclick="filterBySource('${name.replace(/'/g, "\\'")}')">
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${icon} ${name}</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted);">${stats.count} transactions · ${sym}${stats.out.toFixed(2)} out${stats.in > 0 ? ` · ${sym}${stats.in.toFixed(2)} in` : ''}</div>
+        </div>
+        <div style="font-size: 1.5rem;">→</div>
+      </div>`;
+  }).join('');
+}
+
+function filterBySource(source) {
+  const sel = document.getElementById('txSource');
+  if (sel) sel.value = source;
+  renderAllTransactions();
+  // Scroll to results
+  const heading = document.getElementById('txResultsHeading');
+  if (heading) heading.scrollIntoView({ behavior: 'smooth' });
+}
+
 // v1.36: In/Out big toggle at top of Stats
 function setInOutFilter(mode) {
   // Sync the existing type dropdown so all logic still works
@@ -5648,7 +5729,17 @@ function clearTxFilters() {
 function populateTxFilterDropdowns() {
   const catSel = document.getElementById('txCat');
   const accSel = document.getElementById('txAcc');
+  const srcSel = document.getElementById('txSource');
   if (!catSel || !accSel) return;
+  // Sources
+  if (srcSel) {
+    const sources = new Set();
+    txns.forEach(t => sources.add(t._source || 'Manual entry'));
+    income.forEach(i => sources.add(i._source || 'Manual entry'));
+    const curSrc = srcSel.value;
+    srcSel.innerHTML = '<option value="all">All sources</option>' + [...sources].sort().map(s => `<option value="${s}">${s.length > 30 ? s.slice(0, 30) + '…' : s}</option>`).join('');
+    srcSel.value = curSrc || 'all';
+  }
   // Categories
   const cats = new Set([...categories]);
   txns.forEach(t => t.category && cats.add(t.category));
@@ -5669,6 +5760,7 @@ function getFilteredTransactions() {
   const type   = document.getElementById('txType')?.value || 'all';
   const cat    = document.getElementById('txCat')?.value || 'all';
   const acc    = document.getElementById('txAcc')?.value || 'all';
+  const src    = document.getElementById('txSource')?.value || 'all';
   const from   = document.getElementById('txFrom')?.value || '';
   const to     = document.getElementById('txTo')?.value || '';
   const sort   = document.getElementById('txSort')?.value || 'date-desc';
@@ -5682,6 +5774,7 @@ function getFilteredTransactions() {
   if (type !== 'all') combined = combined.filter(t => t._type === type);
   if (cat !== 'all')  combined = combined.filter(t => t.category === cat);
   if (acc !== 'all')  combined = combined.filter(t => t.account === acc);
+  if (src !== 'all')  combined = combined.filter(t => (t._source || 'manual') === src);
   if (from)           combined = combined.filter(t => t.date >= from);
   if (to)             combined = combined.filter(t => t.date <= to);
   if (search) {
@@ -5726,13 +5819,14 @@ function renderAllTransactions() {
     const sign = isIn ? '+' : '-';
     const color = isIn ? '#43e97b' : '#fa709a';
     const taxBadge = t.tax ? '<span class="tax-badge">TAX</span>' : '';
+    const sourceBadge = t._source ? `<span style="font-size:0.65rem; background:var(--bg-soft); color:var(--text-muted); padding:1px 6px; border-radius:8px; margin-left:6px;">📂 ${t._source.length > 20 ? t._source.slice(0, 20) + '…' : t._source}</span>` : '';
     const receiptBtn = !isIn ? (t.receipt
       ? `<img class="receipt-thumb" src="${t.receipt}" onclick="event.stopPropagation();viewReceipt(${t.id})" title="View receipt">`
       : `<button class="delete-btn" onclick="event.stopPropagation();attachReceipt(${t.id})" title="Attach receipt photo" style="font-size:1rem;">📷</button>`) : '';
     return `
     <div class="transaction-item">
       <div class="transaction-info">
-        <div class="transaction-desc">${(t.desc || '').replace(/</g,'&lt;')}${taxBadge}</div>
+        <div class="transaction-desc">${(t.desc || '').replace(/</g,'&lt;')}${taxBadge}${sourceBadge}</div>
         <div class="transaction-meta">${t.category || (isIn ? 'Income' : '—')} • ${t.account || '—'} • ${t.date}</div>
       </div>
       <div style="display: flex; align-items: center; gap: 8px;">
@@ -5984,6 +6078,7 @@ function render() {
   filterTransactions();
   renderCharts();
   if (document.getElementById('allTransactionsList')) renderAllTransactions();
+  if (document.getElementById('sourcesSummary')) renderSourcesSummary();
   } finally {
     // v1.14: Restore original full data so editors and adders see everything
     txns = _origTxns;
