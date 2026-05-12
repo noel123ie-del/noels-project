@@ -4123,15 +4123,39 @@ async function askAI() {
   if (!q) return;
   chat.innerHTML += `<div class="ai-msg user">${q.replace(/</g, '&lt;')}</div>`;
   input.value = '';
-  const thinkingId = '_thinking_ai_' + Date.now();
-  chat.innerHTML += `<div class="ai-msg bot" id="${thinkingId}">💭 Thinking...</div>`;
+  pushChatTurn('user', q);
+
+  const botId = '_aibot_' + Date.now();
+  chat.innerHTML += `<div class="ai-msg bot" id="${botId}"><span class="typing-dots"><span></span><span></span><span></span></span></div>`;
   chat.scrollTop = chat.scrollHeight;
-  const answer = await answerQuestionSmart(q);
-  const thinking = document.getElementById(thinkingId);
-  if (thinking) thinking.remove();
-  chat.innerHTML += `<div class="ai-msg bot">${answer}</div>`;
-  chat.scrollTop = chat.scrollHeight;
-  if (document.getElementById('aiSpeakToggle')?.checked) speakAloud(answer);
+  const botEl = document.getElementById(botId);
+
+  const lower = q.toLowerCase().trim();
+  const isSmallTalk = /^(hi|hello|hey|yo|hiya|howdy|hola|thanks|thank you|cheers|ta|nice|cool|great|awesome|good|ok|okay|got it|sure|alright|bye|goodbye|see ya|later|cya|adios|test|testing|help|joke|funny|who are you|what are you|your name|what can you|how are you|how r u)[\s!.?]*$/i.test(lower);
+  if (isSmallTalk || !anthropicKey) {
+    const answer = answerQuestion(q);
+    if (botEl) botEl.innerHTML = renderMarkdown(answer);
+    chat.scrollTop = chat.scrollHeight;
+    pushChatTurn('assistant', stripHTML(answer));
+    if (document.getElementById('aiSpeakToggle')?.checked) speakAloud(answer);
+    return;
+  }
+
+  // Stream from Claude
+  let finalText = '';
+  await callClaudeAPIStream(q, (sofar) => {
+    if (botEl) {
+      botEl.innerHTML = renderMarkdown(sofar);
+      chat.scrollTop = chat.scrollHeight;
+    }
+    finalText = sofar;
+  });
+  if (!finalText) finalText = answerQuestion(q);
+  if (botEl && (botEl.innerHTML === '' || botEl.querySelector('.typing-dots'))) {
+    botEl.innerHTML = renderMarkdown(finalText);
+  }
+  pushChatTurn('assistant', stripHTML(finalText));
+  if (document.getElementById('aiSpeakToggle')?.checked) speakAloud(finalText);
 }
 
 // ====== v1.10+ Voice for AI assistant ======
@@ -4460,7 +4484,7 @@ function toggleHomeChat() {
   body.style.display = open ? 'none' : 'block';
   btn.textContent = open ? 'Open ▼' : 'Close ▲';
 }
-function homeChatAsk() {
+async function homeChatAsk() {
   const input = document.getElementById('homeChatInput');
   const log = document.getElementById('homeChatLog');
   if (!input || !log) return;
@@ -4468,13 +4492,39 @@ function homeChatAsk() {
   if (!q) return;
   log.innerHTML += `<div class="ai-msg user">${q.replace(/</g, '&lt;')}</div>`;
   input.value = '';
-  const answer = answerQuestion(q);
-  setTimeout(() => {
-    log.innerHTML += `<div class="ai-msg bot" style="background: rgba(255,255,255,0.9); color: #2c3e50;">${answer}</div>`;
-    log.scrollTop = log.scrollHeight;
-    if (document.getElementById('homeChatSpeak')?.checked) speakAloud(answer);
-  }, 300);
+  pushChatTurn('user', q);
+
+  const botId = '_hmbot_' + Date.now();
+  log.innerHTML += `<div class="ai-msg bot" id="${botId}" style="background: rgba(255,255,255,0.9); color: #2c3e50;"><span class="typing-dots"><span></span><span></span><span></span></span></div>`;
   log.scrollTop = log.scrollHeight;
+  const botEl = document.getElementById(botId);
+
+  const lower = q.toLowerCase().trim();
+  const isSmallTalk = /^(hi|hello|hey|yo|hiya|howdy|hola|thanks|thank you|cheers|ta|nice|cool|great|awesome|good|ok|okay|got it|sure|alright|bye|goodbye|see ya|later|cya|adios|test|testing|help|joke|funny|who are you|what are you|your name|what can you|how are you|how r u)[\s!.?]*$/i.test(lower);
+  if (isSmallTalk || !anthropicKey) {
+    const answer = answerQuestion(q);
+    if (botEl) botEl.innerHTML = renderMarkdown(answer);
+    log.scrollTop = log.scrollHeight;
+    pushChatTurn('assistant', stripHTML(answer));
+    if (document.getElementById('homeChatSpeak')?.checked) speakAloud(answer);
+    return;
+  }
+
+  // Stream from Claude
+  let finalText = '';
+  await callClaudeAPIStream(q, (sofar) => {
+    if (botEl) {
+      botEl.innerHTML = renderMarkdown(sofar);
+      log.scrollTop = log.scrollHeight;
+    }
+    finalText = sofar;
+  });
+  if (!finalText) finalText = answerQuestion(q);
+  if (botEl && (botEl.innerHTML === '' || botEl.querySelector('.typing-dots'))) {
+    botEl.innerHTML = renderMarkdown(finalText);
+  }
+  pushChatTurn('assistant', stripHTML(finalText));
+  if (document.getElementById('homeChatSpeak')?.checked) speakAloud(finalText);
 }
 function homeChatMic() {
   const btn = document.getElementById('homeChatMicBtn');
