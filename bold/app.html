@@ -906,23 +906,48 @@
     </div>
 
     <div class="form-card">
-      <h3>🎬 HeyGen Avatar (Premium)</h3>
-      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Add a talking AI avatar that lipsyncs to your AI's replies. Requires a HeyGen account.</p>
+      <h3>🎬 HeyGen Avatar</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Two options — pick whichever you've set up.</p>
+
+      <h4 style="margin: 12px 0 6px; font-size: 0.95rem;">Option A — Share URL (simplest)</h4>
+      <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 8px;">Avatar runs HeyGen's own chat. No Thrift data integration.</p>
       <div class="form-group">
-        <label>HeyGen Interactive Avatar Share URL</label>
+        <label>Interactive Avatar share URL</label>
         <input type="text" id="heygenUrl" placeholder="https://app.heygen.com/share/..." oninput="saveHeygenConfig()">
       </div>
-      <button class="btn btn-primary" onclick="openHeygenAvatar()" style="width:100%; margin-top:8px;">🎬 Launch Avatar</button>
+      <button class="btn btn-primary" onclick="openHeygenAvatar()" style="width:100%; margin-top:6px;">🎬 Launch Avatar</button>
+
+      <h4 style="margin: 20px 0 6px; font-size: 0.95rem;">Option B — API key (avatar speaks Claude's answers)</h4>
+      <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 8px;">⚠️ API key stored in localStorage. Fine for personal use, NOT for sharing the app with others — they'd see your key.</p>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>HeyGen API key</label>
+          <input type="password" id="heygenKey" placeholder="from heygen.com/settings/api" oninput="saveHeygenConfig()">
+        </div>
+        <div class="form-group">
+          <label>Avatar ID</label>
+          <input type="text" id="heygenAvatarId" placeholder="e.g. Anna_public_3_20240108" oninput="saveHeygenConfig()">
+        </div>
+        <div class="form-group">
+          <label>Voice ID (optional)</label>
+          <input type="text" id="heygenVoiceId" placeholder="leave blank for default" oninput="saveHeygenConfig()">
+        </div>
+      </div>
+      <label style="display:flex; align-items:center; gap:8px; margin-top:10px; padding:10px; background:var(--bg-soft); border-radius:8px;">
+        <input type="checkbox" id="heygenChatMode" onchange="saveHeygenConfig()">
+        <span style="font-size:0.9rem;">🎬 Avatar Chat Mode — generate video for every AI reply (slow + costs HeyGen credits per reply)</span>
+      </label>
+      <button class="btn btn-primary" onclick="testHeygenKey()" style="width:100%; margin-top:8px; background: var(--success);">🧪 Test HeyGen key</button>
+      <div id="heygenStatus" style="margin-top:8px; font-size:0.85rem;"></div>
       <details style="margin-top:12px;">
         <summary style="cursor:pointer; font-weight:700; color:var(--accent); font-size:0.85rem;">🛠️ Setup steps</summary>
         <ol style="margin:8px 0 0 18px; line-height:1.7; font-size:0.85rem;">
-          <li>Sign up at <a href="https://app.heygen.com" target="_blank">heygen.com</a> (Creator plan ~$24/mo)</li>
-          <li>Create an Interactive Avatar (Studio → Interactive Avatar)</li>
-          <li>Publish it as a share link</li>
-          <li>Copy share URL and paste above</li>
-          <li>Click 'Launch Avatar' to open it in a modal anytime</li>
+          <li>HeyGen → Profile → API Token → generate one → paste above</li>
+          <li>HeyGen → Avatars → pick one → copy its Avatar ID (e.g. <code>Anna_public_3_20240108</code>)</li>
+          <li>Click 'Test HeyGen key' to verify</li>
+          <li>Tick 'Avatar Chat Mode' to make AI replies appear as avatar videos</li>
         </ol>
-        <p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">⚠️ Limitation: the avatar runs its own chat (not connected to your Thrift data yet). Full data-integrated avatar requires a backend to securely mint tokens. Coming in a future release.</p>
+        <p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">⚠️ Each video takes 20-60 sec to generate. Costs HeyGen credits per video. Best used for occasional questions, not rapid chat.</p>
       </details>
     </div>
 
@@ -1101,6 +1126,22 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
         </div>
         <div id="adminGeneratedCode" style="margin-top: 8px; font-family: monospace; font-size: 0.95rem;"></div>
       </details>
+    </div>
+
+    <div class="form-card">
+      <h3>🖥️ Backend Mode (Reseller setup)</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">For reselling: route API calls through your own server so customers don't see your keys.</p>
+      <label style="display:flex; align-items:center; gap:8px; padding:10px; background:var(--bg-soft); border-radius:8px; cursor:pointer;">
+        <input type="checkbox" id="useBackend" onchange="saveBackendConfig()">
+        <span style="font-size:0.9rem;">Use server proxy at /.netlify/functions/* instead of direct API</span>
+      </label>
+      <p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 10px;">
+        Setup: Go to <a href="https://app.netlify.com" target="_blank">Netlify dashboard</a> → your site → Site settings → Environment variables. Add:<br>
+        • <code>ANTHROPIC_API_KEY</code> = your sk-ant-... key<br>
+        • <code>HEYGEN_API_KEY</code> = your HeyGen key (optional)<br>
+        • <code>LICENSE_SECRET</code> = thrift-2026-noel-secret-v1<br>
+        Save → redeploy. Customers won't see any keys.
+      </p>
     </div>
 
     <div class="form-card">
@@ -1426,15 +1467,28 @@ let investments = JSON.parse(localStorage.getItem('investments') || '[]');
 let anthropicKey = localStorage.getItem('anthropicKey') || '';
 let anthropicModel = localStorage.getItem('anthropicModel') || 'claude-haiku-4-5-20251001';
 // v1.55: Verify API key works before user discovers it's broken via chat
-// v1.55: HeyGen avatar — opens user's interactive avatar in modal
+// v1.55: HeyGen avatar — share URL embed
 let heygenUrl = localStorage.getItem('heygenUrl') || '';
+let heygenKey = localStorage.getItem('heygenKey') || '';
+let heygenAvatarId = localStorage.getItem('heygenAvatarId') || '';
+let heygenVoiceId = localStorage.getItem('heygenVoiceId') || '';
+let heygenChatMode = localStorage.getItem('heygenChatMode') === 'true';
+
 function saveHeygenConfig() {
   heygenUrl = (document.getElementById('heygenUrl')?.value || '').trim();
+  heygenKey = (document.getElementById('heygenKey')?.value || '').trim();
+  heygenAvatarId = (document.getElementById('heygenAvatarId')?.value || '').trim();
+  heygenVoiceId = (document.getElementById('heygenVoiceId')?.value || '').trim();
+  heygenChatMode = !!document.getElementById('heygenChatMode')?.checked;
   localStorage.setItem('heygenUrl', heygenUrl);
+  localStorage.setItem('heygenKey', heygenKey);
+  localStorage.setItem('heygenAvatarId', heygenAvatarId);
+  localStorage.setItem('heygenVoiceId', heygenVoiceId);
+  localStorage.setItem('heygenChatMode', heygenChatMode ? 'true' : 'false');
 }
 function openHeygenAvatar() {
   if (!heygenUrl) {
-    alert('🎬 Add your HeyGen share URL in Settings first.\n\nSign up at heygen.com → create an Interactive Avatar → copy the share link.');
+    alert('🎬 Add your HeyGen share URL in Settings first (Option A).');
     return;
   }
   const modal = document.getElementById('heygenModal');
@@ -1442,6 +1496,95 @@ function openHeygenAvatar() {
   if (!modal || !iframe) return;
   iframe.src = heygenUrl;
   modal.style.display = 'flex';
+}
+
+// Test the HeyGen API key
+async function testHeygenKey() {
+  const statusEl = document.getElementById('heygenStatus');
+  if (!statusEl) return;
+  if (!heygenKey) {
+    statusEl.innerHTML = '<div style="background:var(--warn); color:white; padding:8px 12px; border-radius:6px;">⚠️ Paste a key first</div>';
+    return;
+  }
+  statusEl.innerHTML = '<div style="background:var(--bg-soft); padding:8px 12px; border-radius:6px;">🔄 Testing...</div>';
+  try {
+    const res = await fetch('https://api.heygen.com/v2/avatars', {
+      headers: { 'x-api-key': heygenKey, 'accept': 'application/json' },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const count = data.data?.avatars?.length || 0;
+      statusEl.innerHTML = `<div style="background:var(--success); color:white; padding:10px 12px; border-radius:6px; font-weight:700;">✅ Key works! Found ${count} avatars available.</div>`;
+    } else {
+      const err = await res.text();
+      statusEl.innerHTML = `<div style="background:var(--danger); color:white; padding:10px 12px; border-radius:6px;">❌ ${res.status}: ${err.slice(0, 200)}</div>`;
+    }
+  } catch (e) {
+    statusEl.innerHTML = `<div style="background:var(--danger); color:white; padding:10px 12px; border-radius:6px;">❌ Network: ${e.message}</div>`;
+  }
+}
+
+// Generate avatar video from text + show in chat
+async function speakViaHeygen(text, displayInEl) {
+  if (!heygenKey || !heygenAvatarId) return false;
+  const cleanText = (text || '').replace(/<[^>]+>/g, '').trim().slice(0, 1500);
+  if (!cleanText) return false;
+
+  // Show "generating" placeholder
+  if (displayInEl) {
+    displayInEl.innerHTML += `<div class="ai-msg bot" id="_heygenLoading">🎬 Generating avatar video... (20-60 sec)</div>`;
+  }
+
+  try {
+    const genRes = await fetch('https://api.heygen.com/v2/video/generate', {
+      method: 'POST',
+      headers: { 'x-api-key': heygenKey, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        video_inputs: [{
+          character: { type: 'avatar', avatar_id: heygenAvatarId, avatar_style: 'normal' },
+          voice: heygenVoiceId
+            ? { type: 'text', input_text: cleanText, voice_id: heygenVoiceId }
+            : { type: 'text', input_text: cleanText },
+        }],
+        dimension: { width: 720, height: 480 },
+      }),
+    });
+    if (!genRes.ok) throw new Error(await genRes.text());
+    const genData = await genRes.json();
+    const videoId = genData.data?.video_id;
+    if (!videoId) throw new Error('No video_id returned');
+
+    // Poll for completion
+    let videoUrl = null;
+    for (let i = 0; i < 60; i++) { // up to 5 minutes
+      await new Promise(r => setTimeout(r, 5000));
+      const statusRes = await fetch(`https://api.heygen.com/v1/video_status.get?video_id=${videoId}`, {
+        headers: { 'x-api-key': heygenKey },
+      });
+      if (!statusRes.ok) continue;
+      const statusData = await statusRes.json();
+      const s = statusData.data?.status;
+      if (s === 'completed') {
+        videoUrl = statusData.data.video_url;
+        break;
+      } else if (s === 'failed') {
+        throw new Error('HeyGen video generation failed');
+      }
+    }
+    if (!videoUrl) throw new Error('Timed out waiting for video');
+
+    // Replace loading with video
+    const loading = document.getElementById('_heygenLoading');
+    if (loading) {
+      loading.outerHTML = `<div class="ai-msg bot" style="padding:0; overflow:hidden;"><video src="${videoUrl}" controls autoplay style="width:100%; max-width:400px; display:block; border-radius:12px;"></video></div>`;
+    }
+    return true;
+  } catch (e) {
+    const loading = document.getElementById('_heygenLoading');
+    if (loading) loading.innerHTML = `⚠️ Avatar failed: ${e.message.slice(0, 120)}`;
+    console.error('HeyGen error:', e);
+    return false;
+  }
 }
 
 async function testAnthropicKey() {
@@ -1594,6 +1737,14 @@ function ensureAccountExists(name) {
   }
 }
 
+// v1.56: Backend mode — use Netlify Functions proxy instead of direct API
+let useBackend = localStorage.getItem('useBackend') === 'true';
+function saveBackendConfig() {
+  useBackend = !!document.getElementById('useBackend')?.checked;
+  localStorage.setItem('useBackend', useBackend ? 'true' : 'false');
+  showToast(useBackend ? '🖥️ Backend mode ON — using server keys' : '🔑 Direct mode — using local keys');
+}
+
 // v1.34: Chat history for conversation memory across turns
 let chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
 function pushChatTurn(role, content) {
@@ -1670,7 +1821,8 @@ function suggestPrompt(p) {
 
 // v1.46: Streaming Claude API call — yields text as it arrives
 async function callClaudeAPIStream(question, onChunk) {
-  if (!anthropicKey) return null;
+  // Backend mode — doesn't need anthropicKey (server has it)
+  if (!useBackend && !anthropicKey) return null;
   try {
     const sym = baseCurrency === 'EUR' ? '€' : baseCurrency === 'GBP' ? '£' : '$';
     const modelToUse = anthropicModel === 'auto' ? pickModelForQuestion(question) : anthropicModel;
@@ -1707,20 +1859,25 @@ ${buildAIContext()}`;
     const recentHistory = chatHistory.slice(-6);
     const messages = [...recentHistory, { role: 'user', content: question }];
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    // Backend proxy or direct
+    const endpoint = useBackend ? '/.netlify/functions/claude-proxy' : 'https://api.anthropic.com/v1/messages';
+    const headers = useBackend
+      ? { 'content-type': 'application/json', 'x-license': licenseExpiry ? generateLicenseCode(licenseExpiry) : '' }
+      : {
+          'content-type': 'application/json',
+          'x-api-key': anthropicKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        };
+    const res = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
+      headers,
       body: JSON.stringify({
         model: modelToUse,
         max_tokens: 512,
         system: sysPrompt,
         messages,
-        stream: true,
+        stream: !useBackend, // Netlify Functions don't easily stream — disable for backend mode
       }),
     });
 
@@ -1733,6 +1890,14 @@ ${buildAIContext()}`;
       else friendly = `❌ API error (${res.status}). ${err.slice(0, 150)}`;
       if (onChunk) onChunk(friendly, friendly);
       return friendly;
+    }
+
+    // Backend mode returns full JSON (no streaming yet)
+    if (useBackend) {
+      const data = await res.json();
+      const text = data.content?.[0]?.text || '(empty response)';
+      if (onChunk) onChunk(text, text);
+      return text;
     }
 
     const reader = res.body.getReader();
@@ -7626,6 +7791,12 @@ function render() {
   // v1.55 HeyGen URL sync
   const heygenInput = document.getElementById('heygenUrl');
   if (heygenInput && document.activeElement !== heygenInput) heygenInput.value = heygenUrl;
+  if (document.getElementById('heygenKey')) document.getElementById('heygenKey').value = heygenKey;
+  if (document.getElementById('heygenAvatarId')) document.getElementById('heygenAvatarId').value = heygenAvatarId;
+  if (document.getElementById('heygenVoiceId')) document.getElementById('heygenVoiceId').value = heygenVoiceId;
+  if (document.getElementById('heygenChatMode')) document.getElementById('heygenChatMode').checked = heygenChatMode;
+  // v1.56 Backend mode toggle sync
+  if (document.getElementById('useBackend')) document.getElementById('useBackend').checked = useBackend;
   // v1.52 PIN status
   if (document.getElementById('pinStatus')) {
     renderPinStatus();
