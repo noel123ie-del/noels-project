@@ -1286,6 +1286,141 @@ function clearChatHistory() {
   localStorage.setItem('chatHistory', '[]');
 }
 
+// v1.46: Minimal markdown → HTML rendering for chat
+function renderMarkdown(text) {
+  if (!text) return '';
+  // Escape HTML first
+  let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Code blocks ```
+  html = html.replace(/```([\s\S]*?)```/g, (_, code) => `<pre style="background:rgba(0,0,0,0.06); padding:8px 12px; border-radius:8px; overflow-x:auto; margin:6px 0; font-size:0.85em;"><code>${code.trim()}</code></pre>`);
+  // Inline code `x`
+  html = html.replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.08); padding:1px 5px; border-radius:4px; font-size:0.9em;">$1</code>');
+  // Bold **x**
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Italic _x_ or *x*
+  html = html.replace(/(?<![a-z])\*([^*\n]+)\*(?![a-z])/gi, '<em>$1</em>');
+  // Headers ## x and ### x
+  html = html.replace(/^### (.+)$/gm, '<h4 style="margin:8px 0 4px; font-size:1em;">$1</h4>');
+  html = html.replace(/^## (.+)$/gm, '<h3 style="margin:10px 0 6px; font-size:1.1em;">$1</h3>');
+  // Bullet lists
+  html = html.replace(/(?:^|\n)((?:[-•*]\s+.+\n?)+)/g, (m) => {
+    const items = m.trim().split('\n').map(l => l.replace(/^[-•*]\s+/, '').trim()).filter(Boolean);
+    return '<ul style="margin:6px 0; padding-left:20px;">' + items.map(i => `<li>${i}</li>`).join('') + '</ul>';
+  });
+  // Numbered lists
+  html = html.replace(/(?:^|\n)((?:\d+\.\s+.+\n?)+)/g, (m) => {
+    const items = m.trim().split('\n').map(l => l.replace(/^\d+\.\s+/, '').trim()).filter(Boolean);
+    return '<ol style="margin:6px 0; padding-left:20px;">' + items.map(i => `<li>${i}</li>`).join('') + '</ol>';
+  });
+  // Line breaks (preserve)
+  html = html.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+  return html;
+}
+
+// v1.46: Suggested prompts at empty state
+const SUGGESTED_PROMPTS = [
+  'How much did I spend this week?',
+  'What\'s my biggest category?',
+  'Compare this month to last',
+  'Plan a savings strategy',
+  'Find cheaper alternatives',
+  'Am I spending too much on coffee?',
+  'Should I afford €50 today?',
+  'How can I save €200/month?',
+];
+
+function renderSuggestions() {
+  const container = document.getElementById('floatChatSuggestions');
+  if (!container) return;
+  // Only show if log has just the welcome message
+  const log = document.getElementById('floatChatLog');
+  const msgs = log ? log.querySelectorAll('.ai-msg').length : 0;
+  if (msgs > 1) { container.innerHTML = ''; return; }
+  const picks = SUGGESTED_PROMPTS.sort(() => Math.random() - 0.5).slice(0, 4);
+  container.innerHTML = picks.map(p => `<span class="ai-sugg-chip" onclick="suggestPrompt('${p.replace(/'/g, "\\'")}')">${p}</span>`).join('');
+}
+function suggestPrompt(p) {
+  const input = document.getElementById('floatChatInput');
+  if (input) { input.value = p; floatChatAsk(); }
+}
+
+// v1.46: Streaming Claude API call — yields text as it arrives
+async function callClaudeAPIStream(question, onChunk) {
+  if (!anthropicKey) return null;
+  try {
+    const sym = baseCurrency === 'EUR' ? '€' : baseCurrency === 'GBP' ? '£' : '$';
+    const modelToUse = anthropicModel === 'auto' ? pickModelForQuestion(question) : anthropicModel;
+    const sysPrompt = `You are Thrift — a warm, sharp Irish friend who happens to know everything about ${brandName}'s money. Talk like a real person, not a bot.
+
+TONE: Casual, direct, contractions OK. Brief (2-3 sentences unless asked for a plan). Address as ${brandName} occasionally. Have opinions. Acknowledge feelings.
+
+CONTENT: Reference REAL numbers from data. Suggest concrete cuts with savings. Irish context: Lidl/Aldi 30% cheaper. bonkers.ie for energy. GoMo €12.99/mo. Flag unusual transactions. If data can't answer, say so honestly.
+
+FORMATTING: Use ${sym} for amounts. Plain prose or bullet lists when listing. NO markdown headers.
+
+REMEMBER prior messages in this conversation.
+
+${buildAIContext()}`;
+
+    const recentHistory = chatHistory.slice(-6);
+    const messages = [...recentHistory, { role: 'user', content: question }];
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: modelToUse,
+        max_tokens: 512,
+        system: sysPrompt,
+        messages,
+        stream: true,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      return `⚠️ API error: ${res.status}. ${err.slice(0, 150)}`;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullText = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const event = JSON.parse(line.slice(6));
+            if (event.type === 'content_block_delta' && event.delta?.text) {
+              fullText += event.delta.text;
+              if (onChunk) onChunk(fullText, event.delta.text);
+            }
+          } catch (e) { /* ignore partial JSON */ }
+        }
+      }
+    }
+    const modelLabel = modelToUse.includes('haiku') ? '⚡ Haiku' :
+                       modelToUse.includes('sonnet') ? '🎯 Sonnet' :
+                       modelToUse.includes('opus') ? '🧠 Opus' : '';
+    if (anthropicModel === 'auto' && modelLabel) {
+      fullText += `\n\n<span style="font-size:0.7em; opacity:0.5;">${modelLabel}</span>`;
+    }
+    return fullText;
+  } catch (e) {
+    return `⚠️ Network error: ${e.message}`;
+  }
+}
+
 async function callClaudeAPI(question) {
   if (!anthropicKey) return null;
   try {
@@ -4035,6 +4170,7 @@ function clearFloatChat() {
   clearChatHistory();
   const log = document.getElementById('floatChatLog');
   if (log) log.innerHTML = '<div class="ai-msg bot">👋 Fresh start. Ask me anything.</div>';
+  renderSuggestions();
   showToast('🗑️ Conversation cleared');
 }
 function copyFloatChat() {
@@ -4056,6 +4192,12 @@ function toggleFloatingChat() {
   } else {
     panel.style.display = 'flex';
     bubble.style.transform = 'scale(0.9)';
+    // Show welcome + suggestions if empty
+    const log = document.getElementById('floatChatLog');
+    if (log && log.children.length === 0) {
+      log.innerHTML = `<div class="ai-msg bot">👋 Hi! Ask me anything about your spending — or tap a suggestion below.</div>`;
+    }
+    renderSuggestions();
     setTimeout(() => document.getElementById('floatChatInput')?.focus(), 100);
   }
 }
@@ -4067,19 +4209,41 @@ async function floatChatAsk() {
   if (!q) return;
   log.innerHTML += `<div class="ai-msg user">${q.replace(/</g, '&lt;')}</div>`;
   input.value = '';
-  // Thinking indicator with animated dots
-  const thinkingId = '_thinking_' + Date.now();
-  log.innerHTML += `<div class="ai-msg bot" id="${thinkingId}"><span class="typing-dots"><span></span><span></span><span></span></span></div>`;
-  log.scrollTop = log.scrollHeight;
   pushChatTurn('user', q);
-  const answer = await answerQuestionSmart(q);
-  const thinking = document.getElementById(thinkingId);
-  if (thinking) thinking.remove();
-  log.innerHTML += `<div class="ai-msg bot">${answer}</div>`;
+
+  // Add streaming bot bubble
+  const botId = '_bot_' + Date.now();
+  log.innerHTML += `<div class="ai-msg bot" id="${botId}"><span class="typing-dots"><span></span><span></span><span></span></span></div>`;
   log.scrollTop = log.scrollHeight;
-  // Strip HTML from answer before storing as plain text in history
-  pushChatTurn('assistant', stripHTML(answer));
-  if (document.getElementById('floatChatSpeak')?.checked) speakAloud(answer);
+  const botEl = document.getElementById(botId);
+
+  // Quick small-talk → rules (instant)
+  const lower = q.toLowerCase().trim();
+  const isSmallTalk = /^(hi|hello|hey|yo|hiya|howdy|hola|thanks|thank you|cheers|ta|nice|cool|great|awesome|good|ok|okay|got it|sure|alright|bye|goodbye|see ya|later|cya|adios|test|testing|help|joke|funny|who are you|what are you|your name|what can you|how are you|how r u)[\s!.?]*$/i.test(lower);
+  if (isSmallTalk || !anthropicKey) {
+    const answer = answerQuestion(q);
+    if (botEl) botEl.innerHTML = renderMarkdown(answer);
+    log.scrollTop = log.scrollHeight;
+    pushChatTurn('assistant', stripHTML(answer));
+    if (document.getElementById('floatChatSpeak')?.checked) speakAloud(answer);
+    return;
+  }
+
+  // Stream from Claude
+  let finalText = '';
+  await callClaudeAPIStream(q, (sofar) => {
+    if (botEl) {
+      botEl.innerHTML = renderMarkdown(sofar);
+      log.scrollTop = log.scrollHeight;
+    }
+    finalText = sofar;
+  });
+  if (!finalText) finalText = answerQuestion(q); // fallback if API failed silently
+  if (botEl && botEl.innerHTML === '' || botEl?.querySelector('.typing-dots')) {
+    if (botEl) botEl.innerHTML = renderMarkdown(finalText);
+  }
+  pushChatTurn('assistant', stripHTML(finalText));
+  if (document.getElementById('floatChatSpeak')?.checked) speakAloud(finalText);
 }
 function floatChatMic() {
   const btn = document.getElementById('floatChatMicBtn');
