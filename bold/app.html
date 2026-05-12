@@ -168,6 +168,19 @@
     .receipt-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999; cursor: pointer; }
     .receipt-modal img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
 
+    /* v1.52 Hide values mode — blurs all currency amounts */
+    body.hide-values .hero-card .amount,
+    body.hide-values .stat-value,
+    body.hide-values .transaction-amount,
+    body.hide-values .acct-card .acct-balance,
+    body.hide-values .ring-amt,
+    body.hide-values #netWorthValue,
+    body.hide-values #txTotalSpent,
+    body.hide-values #txTotalIncome,
+    body.hide-values #txNet { filter: blur(8px); transition: filter 0.2s; }
+    body.hide-values .hero-card .amount:hover,
+    body.hide-values .stat-value:hover { filter: blur(0); }
+
     /* ======= v1.9 Niche additions ======= */
     @media print {
       header, .emoji-nav, .fab, .theme-toggle, .toggle-group, .numpad-grid, .numpad-display, .cat-picker, details, .form-card button, .delete-btn, button { display: none !important; }
@@ -325,8 +338,31 @@
       nav button { padding: 12px 8px; font-size: 0.8rem; }
       .hero-card .amount { font-size: 3rem; }
       .ring-grid { grid-template-columns: repeat(2, 1fr); }
+      .emoji-nav { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+      .emoji-nav button { padding: 10px 12px; font-size: 0.7rem; flex-shrink: 0; min-width: 64px; }
       .emoji-nav button .emoji { font-size: 1.4rem; }
-      .emoji-nav button { font-size: 0.7rem; }
+      .container { padding: 16px 12px; }
+      .form-card, .chart-card { padding: 14px; }
+      .ai-msg { max-width: 92%; }
+      .numpad-key { padding: 16px; font-size: 1.3rem; }
+      .cat-tile { padding: 10px 4px; }
+      .cat-tile .emoji { font-size: 1.4rem; }
+      .cat-tile .name { font-size: 0.65rem; }
+      header { padding: 12px 14px; flex-wrap: wrap; gap: 8px; }
+      .logo { font-size: 1.1rem; }
+      .fab { width: 56px; height: 56px; font-size: 1.5rem; bottom: 16px; }
+      #chatBubble { width: 56px !important; height: 56px !important; font-size: 1.5rem !important; bottom: 16px !important; right: 16px !important; }
+      #chatPanel { right: 8px !important; left: 8px !important; width: auto !important; max-width: none !important; bottom: 80px !important; }
+      .acct-grid { grid-template-columns: 1fr; }
+      .heatmap-day { font-size: 0.55rem; }
+      h2 { font-size: 1.4rem; }
+      h3 { font-size: 1.05rem; }
+    }
+    @media (max-width: 400px) {
+      .ring-grid { grid-template-columns: 1fr; }
+      .hero-card .amount { font-size: 2.4rem; }
+      .emoji-nav button { padding: 8px 10px; min-width: 56px; }
+      .emoji-nav button span:last-child { font-size: 0.65rem; }
     }
   </style>
 </head>
@@ -341,6 +377,8 @@
       <option value="business">🏢 Business</option>
       <option value="mortgage">🏡 Mortgage</option>
     </select>
+    <button class="theme-toggle" onclick="toggleHideValues()" title="Hide values (privacy)" id="hideValuesBtn">👁️</button>
+    <button class="theme-toggle" onclick="lockApp()" title="Lock app" id="lockAppBtn" style="display:none;">🔒</button>
     <button class="theme-toggle" id="installBtn" onclick="installPWA()" title="Install app" style="display:none;">📲</button>
     <button class="theme-toggle" onclick="startTour()" title="Take a tour" style="font-size:1.1rem;">❓</button>
     <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme" id="themeToggleBtn">🌙</button>
@@ -363,6 +401,8 @@
   <div id="dashboard" class="section active">
     <!-- Spending alerts banner -->
     <div id="alertBanner" style="display: none;"></div>
+    <!-- v1.51 Auto-save reminder banner -->
+    <div id="autoSaveReminder" style="display: none; margin-bottom: 16px;"></div>
 
     <!-- Personal vs Business side-by-side (only shows when context = All) -->
     <div id="splitView" style="display: none; margin-bottom: 24px;">
@@ -723,6 +763,24 @@
       </details>
     </div>
 
+    <!-- Investments -->
+    <div class="form-card">
+      <h3>📈 Investments</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Track stocks, funds, crypto, property. Manual prices — update when you check.</p>
+      <div id="investmentsList"></div>
+      <details style="margin-top: 12px;">
+        <summary style="cursor: pointer; font-weight: 700; color: var(--accent);">+ Add investment</summary>
+        <div class="form-grid" style="margin-top: 12px;">
+          <div class="form-group"><label>Name</label><input type="text" id="invName" placeholder="e.g. Vanguard S&P 500"></div>
+          <div class="form-group"><label>Ticker / type (optional)</label><input type="text" id="invTicker" placeholder="VUSA, BTC, House"></div>
+          <div class="form-group"><label>Units / shares</label><input type="number" id="invUnits" step="0.0001" placeholder="10"></div>
+          <div class="form-group"><label>Bought at price (€)</label><input type="number" id="invBuyPrice" step="0.01" placeholder="100"></div>
+          <div class="form-group"><label>Current price (€)</label><input type="number" id="invCurrentPrice" step="0.01" placeholder="120"></div>
+        </div>
+        <button class="btn btn-primary" onclick="addInvestment()" style="width: 100%; margin-top: 8px;">Add Investment</button>
+      </details>
+    </div>
+
     <!-- Pots/envelopes -->
     <div class="form-card">
       <h3>💰 Savings Pots</h3>
@@ -920,6 +978,41 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
 <br>
 <strong>To restore:</strong> set <code>"active": true</code> and <code>"banner": ""</code>.
       </div>
+    </div>
+
+    <div class="form-card">
+      <h3>🔒 Privacy & Security</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Stop others on your device from seeing your data.</p>
+
+      <div id="pinStatus" style="margin-bottom: 12px;"></div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>PIN code (4-6 digits)</label>
+          <input type="password" id="pinSetInput" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Leave blank to disable" oninput="savePinConfig()">
+        </div>
+        <div class="form-group">
+          <label>Hint (optional)</label>
+          <input type="text" id="pinHintInput" placeholder="e.g. wedding day" oninput="savePinConfig()">
+        </div>
+        <div class="form-group">
+          <label>Auto-lock after</label>
+          <select id="pinIdleMins" onchange="savePinConfig()">
+            <option value="0">Never (only on launch)</option>
+            <option value="1">1 minute</option>
+            <option value="5">5 minutes</option>
+            <option value="15">15 minutes</option>
+            <option value="60">1 hour</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="btn btn-primary" onclick="lockApp()" style="flex: 1;">🔒 Lock now</button>
+        <button class="btn btn-primary" onclick="toggleHideValues()" style="flex: 1; background: var(--accent-2);">👁️ Toggle hide values</button>
+      </div>
+
+      <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 12px;">⚠️ Honest reality: the PIN protects against someone glancing at your screen. If you forget the PIN, clear browser site data to reset (but you'll lose local data — back up via Backup card first).</p>
     </div>
 
     <div class="form-card" id="licenseCard">
@@ -1125,6 +1218,22 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
   </div>
 </div>
 
+<!-- v1.52: PIN lock screen -->
+<div id="pinLockScreen" style="display:none; position:fixed; inset:0; background:linear-gradient(135deg, #0f1419, #2a3142); color:white; z-index:99998; align-items:center; justify-content:center; padding:20px;">
+  <div style="max-width: 360px; text-align: center; width: 100%;">
+    <div style="font-size: 4rem;">🔒</div>
+    <h2 style="font-size: 1.6rem; margin: 12px 0;" id="pinLockTitle">Enter PIN</h2>
+    <p id="pinLockMessage" style="color: #a0aec0; margin-bottom: 20px;">Your data is private. Enter your PIN to unlock.</p>
+    <input type="password" id="pinLockInput" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off"
+      style="width: 100%; padding: 16px; text-align: center; font-size: 2rem; letter-spacing: 12px; border: 2px solid #4a7baa; border-radius: 12px; background: rgba(255,255,255,0.1); color: white; outline: none;"
+      onkeypress="if(event.key==='Enter')submitPin()" oninput="pinInputChange()">
+    <div style="margin-top: 12px; display: flex; gap: 8px;">
+      <button onclick="submitPin()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #43e97b, #38f9d7); color: white; border: none; border-radius: 10px; font-weight: 800; font-size: 1rem; cursor: pointer;">Unlock</button>
+    </div>
+    <p style="margin-top: 20px; font-size: 0.8rem; opacity: 0.7;" id="pinLockHint"></p>
+  </div>
+</div>
+
 <!-- Subscription expired lock screen -->
 <div id="lockScreen" style="display: none; position: fixed; inset: 0; background: linear-gradient(135deg, #0f1419, #2a3142); color: white; z-index: 99999; align-items: center; justify-content: center; padding: 20px;">
   <div style="max-width: 480px; text-align: center;">
@@ -1205,6 +1314,9 @@ let voiceListening = false;
 
 // v1.10 data
 let netWorthHistory = JSON.parse(localStorage.getItem('netWorthHistory') || '[]');
+
+// v1.51 data
+let investments = JSON.parse(localStorage.getItem('investments') || '[]');
 
 // v1.17 Claude API config
 let anthropicKey = localStorage.getItem('anthropicKey') || '';
@@ -2119,6 +2231,124 @@ deleteIncome = function(id) {
   render();
 };
 
+// ===== v1.52 PIN lock + Hide values =====
+let appPin = localStorage.getItem('appPin') || '';
+let appPinHint = localStorage.getItem('appPinHint') || '';
+let appPinIdleMins = parseInt(localStorage.getItem('appPinIdleMins') || '0') || 0;
+let hideValues = localStorage.getItem('hideValues') === 'true';
+let pinIdleTimer = null;
+let pinUnlocked = !appPin; // unlocked by default if no PIN
+
+function showLockBtnIfPinSet() {
+  const btn = document.getElementById('lockAppBtn');
+  if (btn) btn.style.display = appPin ? 'inline-block' : 'none';
+}
+
+function savePinConfig() {
+  const newPin = (document.getElementById('pinSetInput')?.value || '').replace(/\D/g, '');
+  const newHint = document.getElementById('pinHintInput')?.value || '';
+  const newIdle = parseInt(document.getElementById('pinIdleMins')?.value || '0') || 0;
+
+  if (newPin && (newPin.length < 4 || newPin.length > 6)) {
+    return; // not yet valid — wait for full input
+  }
+  appPin = newPin;
+  appPinHint = newHint;
+  appPinIdleMins = newIdle;
+  localStorage.setItem('appPin', appPin);
+  localStorage.setItem('appPinHint', appPinHint);
+  localStorage.setItem('appPinIdleMins', String(appPinIdleMins));
+  showLockBtnIfPinSet();
+  renderPinStatus();
+  resetIdleTimer();
+}
+
+function renderPinStatus() {
+  const el = document.getElementById('pinStatus');
+  if (!el) return;
+  if (appPin) {
+    el.innerHTML = `<div style="background: var(--success); color: white; padding: 10px 14px; border-radius: 8px; font-weight: 700;">✅ PIN protection ON (${appPin.length} digits)${appPinIdleMins > 0 ? ` · auto-lock after ${appPinIdleMins} min idle` : ''}</div>`;
+  } else {
+    el.innerHTML = `<div style="background: var(--bg-soft); padding: 10px 14px; border-radius: 8px; color: var(--text-muted);">⚪ No PIN set — anyone with your device can see this data</div>`;
+  }
+}
+
+function lockApp() {
+  if (!appPin) {
+    showToast('⚠️ Set a PIN in Settings first');
+    return;
+  }
+  pinUnlocked = false;
+  const lock = document.getElementById('pinLockScreen');
+  const input = document.getElementById('pinLockInput');
+  const hint = document.getElementById('pinLockHint');
+  if (lock) lock.style.display = 'flex';
+  if (input) { input.value = ''; setTimeout(() => input.focus(), 100); }
+  if (hint) hint.textContent = appPinHint ? `💡 Hint: ${appPinHint}` : '';
+}
+
+function pinInputChange() {
+  const input = document.getElementById('pinLockInput');
+  if (input && input.value.length === appPin.length) {
+    submitPin();
+  }
+}
+
+function submitPin() {
+  const input = document.getElementById('pinLockInput');
+  if (!input) return;
+  if (input.value === appPin) {
+    pinUnlocked = true;
+    document.getElementById('pinLockScreen').style.display = 'none';
+    resetIdleTimer();
+    showToast('🔓 Unlocked');
+  } else {
+    input.style.borderColor = '#ff5e5e';
+    input.style.background = 'rgba(255,94,94,0.2)';
+    setTimeout(() => {
+      input.value = '';
+      input.style.borderColor = '#4a7baa';
+      input.style.background = 'rgba(255,255,255,0.1)';
+      input.focus();
+    }, 800);
+  }
+}
+
+function checkPinOnLaunch() {
+  if (appPin) {
+    pinUnlocked = false;
+    lockApp();
+  }
+}
+
+function resetIdleTimer() {
+  if (pinIdleTimer) clearTimeout(pinIdleTimer);
+  if (appPin && appPinIdleMins > 0 && pinUnlocked) {
+    pinIdleTimer = setTimeout(() => lockApp(), appPinIdleMins * 60 * 1000);
+  }
+}
+['mousemove', 'keydown', 'touchstart', 'click'].forEach(ev => {
+  document.addEventListener(ev, () => { if (pinUnlocked && appPin && appPinIdleMins > 0) resetIdleTimer(); }, { passive: true });
+});
+
+function toggleHideValues() {
+  hideValues = !hideValues;
+  localStorage.setItem('hideValues', hideValues ? 'true' : 'false');
+  document.body.classList.toggle('hide-values', hideValues);
+  const btn = document.getElementById('hideValuesBtn');
+  if (btn) btn.textContent = hideValues ? '🙈' : '👁️';
+  showToast(hideValues ? '🙈 Values hidden' : '👁️ Values visible');
+}
+
+// Apply hide-values on load
+if (hideValues) {
+  document.body.classList.add('hide-values');
+  setTimeout(() => {
+    const btn = document.getElementById('hideValuesBtn');
+    if (btn) btn.textContent = '🙈';
+  }, 100);
+}
+
 // ===== v1.19 Anti-copy: Domain lock =====
 const ALLOWED_DOMAINS = [
   'comfy-donut-f8587d.netlify.app',
@@ -2453,6 +2683,125 @@ function setAccountType(account, type) {
   save();
   showToast(`${account} → ${type === 'personal' ? '🏠 Personal' : '🏢 Business'}`);
   render();
+}
+
+// v1.51: Investment tracking
+function addInvestment() {
+  const name = document.getElementById('invName').value.trim();
+  const ticker = document.getElementById('invTicker').value.trim();
+  const units = parseFloat(document.getElementById('invUnits').value) || 0;
+  const buyPrice = parseFloat(document.getElementById('invBuyPrice').value) || 0;
+  const currentPrice = parseFloat(document.getElementById('invCurrentPrice').value) || buyPrice;
+  if (!name || !units || !buyPrice) return alert('Enter at least name, units, and bought price');
+  investments.push({ id: Date.now(), name, ticker, units, buyPrice, currentPrice, addedAt: new Date().toISOString() });
+  save();
+  ['invName','invTicker','invUnits','invBuyPrice','invCurrentPrice'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  renderInvestments();
+  showToast(`📈 Added ${name}`);
+}
+function updateInvestmentPrice(id, newPrice) {
+  const inv = investments.find(x => x.id === id);
+  if (!inv) return;
+  inv.currentPrice = parseFloat(newPrice) || inv.currentPrice;
+  inv.priceUpdatedAt = new Date().toISOString();
+  save();
+  renderInvestments();
+  renderNetWorth();
+}
+function deleteInvestment(id) {
+  if (!confirm('Remove this investment?')) return;
+  investments = investments.filter(x => x.id !== id);
+  save();
+  renderInvestments();
+  renderNetWorth();
+}
+function renderInvestments() {
+  const list = document.getElementById('investmentsList');
+  if (!list) return;
+  if (!investments.length) {
+    list.innerHTML = '<div class="empty-state"><div class="illust">📈</div><div class="title">No investments tracked</div><div class="hint">Add stocks, funds, crypto, or property below.</div></div>';
+    return;
+  }
+  const sym = currencySymbol();
+  let portfolio = 0, invested = 0;
+  list.innerHTML = investments.map(i => {
+    const value = i.units * i.currentPrice;
+    const cost = i.units * i.buyPrice;
+    const pnl = value - cost;
+    const pct = cost > 0 ? (pnl / cost) * 100 : 0;
+    portfolio += value;
+    invested += cost;
+    const color = pnl >= 0 ? 'var(--success)' : 'var(--danger)';
+    return `
+      <div style="background: var(--bg-soft); padding: 14px; border-radius: 10px; margin-bottom: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: start; gap: 8px;">
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 700;">${i.name}${i.ticker ? ` <span style="color: var(--text-muted); font-size: 0.85em;">(${i.ticker})</span>` : ''}</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted);">${i.units} units · bought ${sym}${i.buyPrice.toFixed(2)} each</div>
+          </div>
+          <button class="delete-btn" onclick="deleteInvestment(${i.id})">×</button>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 8px; flex-wrap: wrap;">
+          <div>
+            <div style="font-size: 1.4rem; font-weight: 800;">${sym}${value.toFixed(2)}</div>
+            <div style="font-size: 0.85rem; color: ${color}; font-weight: 700;">${pnl >= 0 ? '+' : ''}${sym}${pnl.toFixed(2)} (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem;">
+            <label style="color: var(--text-muted);">Current price</label>
+            <input type="number" step="0.01" value="${i.currentPrice}" onchange="updateInvestmentPrice(${i.id}, this.value)" style="width: 100px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text);">
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+  const totalPnl = portfolio - invested;
+  const totalPct = invested > 0 ? (totalPnl / invested) * 100 : 0;
+  list.insertAdjacentHTML('afterbegin', `
+    <div style="background: linear-gradient(135deg, ${totalPnl >= 0 ? '#43e97b, #38f9d7' : '#ff5e5e, #c0392b'}); color: white; padding: 16px; border-radius: 12px; margin-bottom: 12px;">
+      <div style="font-size: 0.85rem; opacity: 0.9;">Portfolio value</div>
+      <div style="font-size: 2rem; font-weight: 900;">${sym}${portfolio.toFixed(2)}</div>
+      <div style="font-size: 0.9rem; opacity: 0.95;">${totalPnl >= 0 ? '+' : ''}${sym}${totalPnl.toFixed(2)} (${totalPct >= 0 ? '+' : ''}${totalPct.toFixed(1)}%) from ${sym}${invested.toFixed(2)} invested</div>
+    </div>`);
+}
+
+// v1.51: Include investments in net worth
+const _origRenderNetWorth = typeof renderNetWorth === 'function' ? renderNetWorth : null;
+
+// v1.51: Auto-save reminder — show banner if a saved rule is due
+function checkAutoSaveReminders() {
+  const banner = document.getElementById('autoSaveReminder');
+  if (!banner) return;
+  // Look for save rules that haven't been triggered in 7+ days
+  const stale = saveRules.filter(r => {
+    const last = r.lastTriggered ? new Date(r.lastTriggered) : null;
+    if (!last) return r.triggered === 0; // never triggered
+    const daysSince = (Date.now() - last.getTime()) / 86400000;
+    return daysSince >= 7;
+  });
+  if (stale.length === 0) { banner.style.display = 'none'; return; }
+  banner.style.display = 'block';
+  banner.innerHTML = `
+    <div style="background: linear-gradient(135deg, #f6a93b, #e07a00); color: white; padding: 14px 18px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(224,122,0,0.3);">
+      <div>
+        <div style="font-weight: 800;">💰 ${stale.length} save rule${stale.length > 1 ? 's' : ''} ready</div>
+        <div style="font-size: 0.85rem; opacity: 0.95;">Haven't triggered in a week — fire them now?</div>
+      </div>
+      <button onclick="fireAllStaleRules()" style="background: white; color: #e07a00; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 800;">Save All</button>
+    </div>`;
+}
+function fireAllStaleRules() {
+  let total = 0;
+  saveRules.forEach(r => {
+    const last = r.lastTriggered ? new Date(r.lastTriggered) : null;
+    const daysSince = last ? (Date.now() - last.getTime()) / 86400000 : 999;
+    if (daysSince >= 7) {
+      triggerSaveRule(r.id);
+      r.lastTriggered = new Date().toISOString();
+      total += r.amount;
+    }
+  });
+  save();
+  showToast(`💰 Saved ${currencySymbol()}${total.toFixed(2)} to pot from stale rules`);
+  checkAutoSaveReminders();
 }
 
 // v1.50: Month comparison line chart — this month cumulative vs last month
@@ -2812,6 +3161,7 @@ function save() {
   localStorage.setItem('saveRules', JSON.stringify(saveRules));
   localStorage.setItem('baseCurrency', baseCurrency);
   localStorage.setItem('netWorthHistory', JSON.stringify(netWorthHistory));
+  localStorage.setItem('investments', JSON.stringify(investments));
   localStorage.setItem('accountTypes', JSON.stringify(accountTypes));
   localStorage.setItem('contextBudgets', JSON.stringify(contextBudgets));
 }
@@ -6384,9 +6734,12 @@ function renderNetWorth() {
   if (!aList || !lList) return;
   const totalAssets = assets.reduce((s, a) => s + a.value, 0);
   const totalLiab = liabilities.reduce((s, l) => s + l.value, 0);
-  const net = totalAssets - totalLiab;
-  if (valEl) valEl.textContent = (net < 0 ? '-€' : '€') + Math.abs(net).toLocaleString('en-IE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-  if (subEl) subEl.textContent = `€${totalAssets.toLocaleString('en-IE')} assets − €${totalLiab.toLocaleString('en-IE')} liabilities`;
+  const totalInvestments = (investments || []).reduce((s, i) => s + (i.units * i.currentPrice), 0);
+  const totalPots = (pots || []).reduce((s, p) => s + (p.balance || 0), 0);
+  const net = totalAssets + totalInvestments + totalPots - totalLiab;
+  const sym = currencySymbol();
+  if (valEl) valEl.textContent = (net < 0 ? '-' + sym : sym) + Math.abs(net).toLocaleString('en-IE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  if (subEl) subEl.textContent = `${sym}${(totalAssets + totalInvestments + totalPots).toLocaleString('en-IE')} (incl. ${sym}${totalInvestments.toLocaleString('en-IE')} invest + ${sym}${totalPots.toLocaleString('en-IE')} pots) − ${sym}${totalLiab.toLocaleString('en-IE')} liabilities`;
 
   aList.innerHTML = assets.length ? assets.map(a => `
     <div class="transaction-item">
@@ -7009,6 +7362,8 @@ function render() {
   if (document.getElementById('goalsList')) renderGoals();
   if (document.getElementById('assetsList')) renderNetWorth();
   if (document.getElementById('potsList')) renderPots();
+  if (document.getElementById('investmentsList')) renderInvestments();
+  if (document.getElementById('autoSaveReminder')) checkAutoSaveReminders();
 
   // v1.8 smart features
   if (document.getElementById('smartSuggestions')) renderSmartSuggestions();
@@ -7031,6 +7386,14 @@ function render() {
   if (document.getElementById('importHistory')) renderImportHistory();
   // v1.39 undo history
   if (document.getElementById('undoHistory')) renderUndoHistory();
+  // v1.52 PIN status
+  if (document.getElementById('pinStatus')) {
+    renderPinStatus();
+    const hintInput = document.getElementById('pinHintInput');
+    const idleSel = document.getElementById('pinIdleMins');
+    if (hintInput && document.activeElement !== hintInput) hintInput.value = appPinHint;
+    if (idleSel) idleSel.value = String(appPinIdleMins);
+  }
   // v1.47 voice config sync
   if (document.getElementById('voiceEngine')) {
     document.getElementById('voiceEngine').value = voiceEngine;
@@ -7092,6 +7455,8 @@ if (checkDomainLock()) {
   checkToS(); // shows ToS modal if first launch (non-blocking — render still proceeds)
   checkLicenseGate(); // v1.16 — show lock if expired
   checkRemoteStatus(); // v1.18 — remote kill-switch
+  checkPinOnLaunch(); // v1.52 — show PIN screen if set
+  showLockBtnIfPinSet();
   render();
   initPlaidLink();
   autoStartTourIfNew(); // v1.21 first-launch onboarding
