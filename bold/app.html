@@ -906,6 +906,27 @@
     </div>
 
     <div class="form-card">
+      <h3>🎬 HeyGen Avatar (Premium)</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Add a talking AI avatar that lipsyncs to your AI's replies. Requires a HeyGen account.</p>
+      <div class="form-group">
+        <label>HeyGen Interactive Avatar Share URL</label>
+        <input type="text" id="heygenUrl" placeholder="https://app.heygen.com/share/..." oninput="saveHeygenConfig()">
+      </div>
+      <button class="btn btn-primary" onclick="openHeygenAvatar()" style="width:100%; margin-top:8px;">🎬 Launch Avatar</button>
+      <details style="margin-top:12px;">
+        <summary style="cursor:pointer; font-weight:700; color:var(--accent); font-size:0.85rem;">🛠️ Setup steps</summary>
+        <ol style="margin:8px 0 0 18px; line-height:1.7; font-size:0.85rem;">
+          <li>Sign up at <a href="https://app.heygen.com" target="_blank">heygen.com</a> (Creator plan ~$24/mo)</li>
+          <li>Create an Interactive Avatar (Studio → Interactive Avatar)</li>
+          <li>Publish it as a share link</li>
+          <li>Copy share URL and paste above</li>
+          <li>Click 'Launch Avatar' to open it in a modal anytime</li>
+        </ol>
+        <p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">⚠️ Limitation: the avatar runs its own chat (not connected to your Thrift data yet). Full data-integrated avatar requires a backend to securely mint tokens. Coming in a future release.</p>
+      </details>
+    </div>
+
+    <div class="form-card">
       <h3>🗣️ AI Voice</h3>
       <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Pick the voice Thrift uses when speaking. Premium options sound like real humans.</p>
       <div class="form-group">
@@ -1100,7 +1121,9 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
           </select>
         </div>
       </div>
-      <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 8px;">Get a key from <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color: var(--accent);">console.anthropic.com</a>. Without a key, rules engine still answers most questions for free.</p>
+      <button class="btn btn-primary" onclick="testAnthropicKey()" style="width:100%; margin-top:10px; background: var(--success);">🧪 Test API key</button>
+      <div id="apiKeyStatus" style="margin-top:8px; font-size:0.85rem;"></div>
+      <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 8px;">Get a key from <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color: var(--accent);">console.anthropic.com</a>. Without a key, rules engine still answers basic questions for free.</p>
     </div>
 
     <div class="form-card">
@@ -1256,6 +1279,14 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
   </div>
 </div>
 
+<!-- v1.55: HeyGen avatar modal -->
+<div id="heygenModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:99997; align-items:center; justify-content:center; padding:16px;">
+  <div style="position:relative; width:100%; max-width:560px; height:80vh; background:black; border-radius:16px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+    <button onclick="document.getElementById('heygenModal').style.display='none'" style="position:absolute; top:10px; right:10px; z-index:10; background:rgba(0,0,0,0.6); border:none; color:white; font-size:1.6rem; cursor:pointer; width:36px; height:36px; border-radius:50%;">×</button>
+    <iframe id="heygenIframe" src="" width="100%" height="100%" allow="camera; microphone; autoplay" style="border:none;"></iframe>
+  </div>
+</div>
+
 <!-- v1.53: Edit Transaction modal — replaces prompts with nice UI -->
 <div id="editTxnModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:99996; align-items:center; justify-content:center; padding:16px;">
   <div style="max-width:460px; width:100%; background:var(--bg-card); color:var(--text); border-radius:16px; padding:20px; box-shadow:0 20px 60px rgba(0,0,0,0.5); max-height:92vh; overflow-y:auto;">
@@ -1394,6 +1425,70 @@ let investments = JSON.parse(localStorage.getItem('investments') || '[]');
 // v1.17 Claude API config
 let anthropicKey = localStorage.getItem('anthropicKey') || '';
 let anthropicModel = localStorage.getItem('anthropicModel') || 'claude-haiku-4-5-20251001';
+// v1.55: Verify API key works before user discovers it's broken via chat
+// v1.55: HeyGen avatar — opens user's interactive avatar in modal
+let heygenUrl = localStorage.getItem('heygenUrl') || '';
+function saveHeygenConfig() {
+  heygenUrl = (document.getElementById('heygenUrl')?.value || '').trim();
+  localStorage.setItem('heygenUrl', heygenUrl);
+}
+function openHeygenAvatar() {
+  if (!heygenUrl) {
+    alert('🎬 Add your HeyGen share URL in Settings first.\n\nSign up at heygen.com → create an Interactive Avatar → copy the share link.');
+    return;
+  }
+  const modal = document.getElementById('heygenModal');
+  const iframe = document.getElementById('heygenIframe');
+  if (!modal || !iframe) return;
+  iframe.src = heygenUrl;
+  modal.style.display = 'flex';
+}
+
+async function testAnthropicKey() {
+  const statusEl = document.getElementById('apiKeyStatus');
+  if (!statusEl) return;
+  const key = (document.getElementById('anthropicKey')?.value || '').trim();
+  if (!key) {
+    statusEl.innerHTML = '<div style="background:var(--warn); color:white; padding:8px 12px; border-radius:6px;">⚠️ Paste a key first</div>';
+    return;
+  }
+  statusEl.innerHTML = '<div style="background:var(--bg-soft); padding:8px 12px; border-radius:6px;">🔄 Testing key with a tiny request...</div>';
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'Say "ok" only.' }],
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const reply = data.content?.[0]?.text || '';
+      statusEl.innerHTML = `<div style="background:var(--success); color:white; padding:10px 12px; border-radius:6px; font-weight:700;">✅ Key works! Got reply: "${reply.slice(0, 30)}"<br><br>Your chat is fully smart now.</div>`;
+      // Auto-save the working key
+      anthropicKey = key;
+      localStorage.setItem('anthropicKey', anthropicKey);
+    } else {
+      const errText = await res.text();
+      let friendly = `HTTP ${res.status}`;
+      if (res.status === 401) friendly = '❌ Invalid key (401). Check you copied the whole thing including sk-ant-';
+      else if (res.status === 429) friendly = '❌ Rate limited (429). Wait a minute and try again.';
+      else if (res.status === 403) friendly = '❌ Forbidden (403). Key might be revoked or out of credits.';
+      else if (res.status >= 500) friendly = '❌ Anthropic server issue (5xx). Try again in a minute.';
+      statusEl.innerHTML = `<div style="background:var(--danger); color:white; padding:10px 12px; border-radius:6px;">${friendly}<br><small style="opacity:0.8;">${errText.slice(0, 200)}</small></div>`;
+    }
+  } catch (e) {
+    statusEl.innerHTML = `<div style="background:var(--danger); color:white; padding:10px 12px; border-radius:6px;">❌ Network error: ${e.message}<br><small>Check internet connection.</small></div>`;
+  }
+}
+
 function saveAIConfig() {
   const k = document.getElementById('anthropicKey')?.value || '';
   const m = document.getElementById('anthropicModel')?.value || 'claude-haiku-4-5-20251001';
@@ -1631,7 +1726,13 @@ ${buildAIContext()}`;
 
     if (!res.ok) {
       const err = await res.text();
-      return `⚠️ API error: ${res.status}. ${err.slice(0, 150)}`;
+      let friendly;
+      if (res.status === 401) friendly = '❌ Invalid API key. Go to Settings → 🧠 Smart AI → Test API key.';
+      else if (res.status === 429) friendly = '❌ Rate limited. Wait a moment and try again.';
+      else if (res.status === 403) friendly = '❌ Out of credits or key revoked. Check your Anthropic console.';
+      else friendly = `❌ API error (${res.status}). ${err.slice(0, 150)}`;
+      if (onChunk) onChunk(friendly, friendly);
+      return friendly;
     }
 
     const reader = res.body.getReader();
@@ -5921,7 +6022,11 @@ function answerQuestion(q) {
     return `I can answer ALL kinds of finance questions about your data:<br>• <em>"How much on coffee last month?"</em><br>• <em>"What's my biggest category?"</em><br>• <em>"Cheaper alternatives to Tesco"</em><br>• <em>"Compare this month to last month"</em><br>• <em>"What day do I spend most?"</em><br>• <em>"Forecast end of month"</em><br>• <em>"Should I spend €50?"</em><br>• <em>"Average per week?"</em><br>• <em>"How many times at Starbucks?"</em><br>• <em>"What's my net worth?"</em><br>• <em>"How much in pots?"</em>`;
   }
 
-  return `I'm not sure how to answer that exactly. Try rephrasing — I understand questions about: spending amounts, categories, merchants, comparisons, forecasts, budgets, accounts, savings, subscriptions, goals, taxes, CO2, and "should I afford" advice. Or type <em>"help"</em> for examples.`;
+  // v1.55: diagnostic fallback — tell user clearly what's wrong
+  if (!anthropicKey) {
+    return `Hmm, I can answer simple questions but for anything more specific I need a Claude API key.<br><br>👉 <strong>Settings → 🧠 Smart AI</strong> → paste your key from <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a><br><br>Without a key, I can only handle basics like "how much this week" or "biggest category".`;
+  }
+  return `I tried but my rules engine couldn't answer. Looks like your Claude API may not be configured properly — check Settings → Smart AI to verify the key. Then try again.`;
 }
 
 // ====== v1.10 Receipt photo attach ======
@@ -7518,6 +7623,9 @@ function render() {
   if (document.getElementById('importHistory')) renderImportHistory();
   // v1.39 undo history
   if (document.getElementById('undoHistory')) renderUndoHistory();
+  // v1.55 HeyGen URL sync
+  const heygenInput = document.getElementById('heygenUrl');
+  if (heygenInput && document.activeElement !== heygenInput) heygenInput.value = heygenUrl;
   // v1.52 PIN status
   if (document.getElementById('pinStatus')) {
     renderPinStatus();
