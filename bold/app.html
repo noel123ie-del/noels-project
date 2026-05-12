@@ -168,6 +168,27 @@
     .receipt-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999; cursor: pointer; }
     .receipt-modal img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
 
+    /* v1.54 Settings accordion sections */
+    .settings-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 14px; overflow: hidden; }
+    .settings-section > summary { padding: 16px 20px; cursor: pointer; font-weight: 800; font-size: 1.05rem; display: flex; align-items: center; gap: 10px; user-select: none; list-style: none; }
+    .settings-section > summary::-webkit-details-marker { display: none; }
+    .settings-section > summary::after { content: '▾'; margin-left: auto; transition: transform 0.2s; color: var(--text-muted); font-size: 1.1rem; }
+    .settings-section[open] > summary::after { transform: rotate(180deg); }
+    .settings-section > summary:hover { background: var(--bg-soft); }
+    .settings-section-body { padding: 0 16px 16px; }
+    .settings-section-body .form-card { box-shadow: none; border: 1px dashed var(--border); margin-bottom: 12px; }
+    .settings-section-body .form-card:last-child { margin-bottom: 0; }
+
+    /* v1.54 Tooltip system — works on hover AND tap */
+    [data-tip] { position: relative; }
+    [data-tip]:hover::after, [data-tip].show-tip::after {
+      content: attr(data-tip);
+      position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      background: #2c3e50; color: white; padding: 6px 10px; border-radius: 6px;
+      font-size: 0.75rem; white-space: nowrap; pointer-events: none; z-index: 999;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
     /* v1.52 Hide values mode — blurs all currency amounts */
     body.hide-values .hero-card .amount,
     body.hide-values .stat-value,
@@ -377,11 +398,11 @@
       <option value="business">🏢 Business</option>
       <option value="mortgage">🏡 Mortgage</option>
     </select>
-    <button class="theme-toggle" onclick="toggleHideValues()" title="Hide values (privacy)" id="hideValuesBtn">👁️</button>
-    <button class="theme-toggle" onclick="lockApp()" title="Lock app" id="lockAppBtn" style="display:none;">🔒</button>
-    <button class="theme-toggle" id="installBtn" onclick="installPWA()" title="Install app" style="display:none;">📲</button>
-    <button class="theme-toggle" onclick="startTour()" title="Take a tour" style="font-size:1.1rem;">❓</button>
-    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme" id="themeToggleBtn">🌙</button>
+    <button class="theme-toggle" onclick="toggleHideValues()" data-tip="Hide all € values" id="hideValuesBtn">👁️</button>
+    <button class="theme-toggle" onclick="lockApp()" data-tip="Lock app now" id="lockAppBtn" style="display:none;">🔒</button>
+    <button class="theme-toggle" id="installBtn" onclick="installPWA()" data-tip="Install as app" style="display:none;">📲</button>
+    <button class="theme-toggle" onclick="startTour()" data-tip="Take a tour" style="font-size:1.1rem;">❓</button>
+    <button class="theme-toggle" onclick="toggleTheme()" data-tip="Light / dark theme" id="themeToggleBtn">🌙</button>
     <button class="btn btn-primary" style="padding: 8px 16px; font-size: 0.9rem;" onclick="switchSection(null, 'daily-log')">Quick Add</button>
   </div>
 </header>
@@ -799,6 +820,23 @@
 
   <!-- Settings -->
   <div id="settings" class="section">
+    <!-- v1.54 Search settings -->
+    <div class="form-card" style="position: sticky; top: 8px; z-index: 50; margin-bottom: 14px;">
+      <input type="text" id="settingsSearch" placeholder="🔍 Search settings... (try: import, voice, pin, sync)" oninput="filterSettings()" style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); color: var(--text); font-size: 1rem;">
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+        <span class="ai-sugg-chip" onclick="jumpToSetting('Import')">📥 Import</span>
+        <span class="ai-sugg-chip" onclick="jumpToSetting('Smart AI')">🧠 AI</span>
+        <span class="ai-sugg-chip" onclick="jumpToSetting('Voice')">🗣️ Voice</span>
+        <span class="ai-sugg-chip" onclick="jumpToSetting('Privacy')">🔒 Privacy</span>
+        <span class="ai-sugg-chip" onclick="jumpToSetting('Share')">👥 Share</span>
+        <span class="ai-sugg-chip" onclick="jumpToSetting('Backup')">💾 Backup</span>
+        <span class="ai-sugg-chip" onclick="jumpToSetting('Branding')">🎨 Brand</span>
+        <span class="ai-sugg-chip" onclick="jumpToSetting('Budgets')">📋 Budgets</span>
+        <span class="ai-sugg-chip" onclick="jumpToSetting('License')">🔐 License</span>
+        <span class="ai-sugg-chip" onclick="jumpToSetting('Data')">🗑️ Clear Data</span>
+      </div>
+    </div>
+
     <div class="form-card">
       <h3>🔗 Connect Your Bank (Plaid)</h3>
       <p style="color: #8fa3b8; margin-bottom: 16px; font-size: 0.9rem;">Link your Irish bank account securely via Plaid</p>
@@ -2265,6 +2303,33 @@ deleteIncome = function(id) {
   save();
   render();
 };
+
+// v1.54: Settings search + quick jump
+function filterSettings() {
+  const q = (document.getElementById('settingsSearch')?.value || '').toLowerCase().trim();
+  const cards = document.querySelectorAll('#settings > .form-card');
+  cards.forEach((card, idx) => {
+    if (idx === 0) return; // skip the search card itself
+    const text = (card.textContent || '').toLowerCase();
+    card.style.display = !q || text.includes(q) ? '' : 'none';
+  });
+}
+function jumpToSetting(term) {
+  const cards = document.querySelectorAll('#settings > .form-card');
+  for (const card of cards) {
+    const h3 = card.querySelector('h3');
+    if (h3 && h3.textContent.toLowerCase().includes(term.toLowerCase())) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Flash highlight
+      const orig = card.style.boxShadow;
+      card.style.boxShadow = '0 0 0 3px var(--accent)';
+      setTimeout(() => { card.style.boxShadow = orig; }, 1200);
+      return;
+    }
+  }
+  // Clear search on jump miss
+  showToast(`No setting found for "${term}"`);
+}
 
 // ===== v1.52 PIN lock + Hide values =====
 let appPin = localStorage.getItem('appPin') || '';
