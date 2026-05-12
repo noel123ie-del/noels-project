@@ -582,6 +582,22 @@
       <div id="weeklyRecap" style="line-height: 1.8;"></div>
     </div>
 
+    <!-- This month vs last month -->
+    <div class="chart-card">
+      <h3>📊 This Month vs Last Month</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.85rem;">Cumulative spending day-by-day. Bigger gap = bigger change.</p>
+      <div class="chart-wrapper"><canvas id="monthCompareChart"></canvas></div>
+      <div id="monthCompareStats" style="margin-top: 12px; font-size: 0.9rem;"></div>
+    </div>
+
+    <!-- Forecast rest of month -->
+    <div class="chart-card">
+      <h3>🔮 Forecast — Rest of This Month</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.85rem;">Projection based on daily average + upcoming detected bills.</p>
+      <div class="chart-wrapper"><canvas id="forecastChart"></canvas></div>
+      <div id="forecastChartStats" style="margin-top: 12px; font-size: 0.9rem;"></div>
+    </div>
+
     <!-- AI Assistant -->
     <div class="form-card">
       <h3>🤖 Ask Thrift</h3>
@@ -2437,6 +2453,237 @@ function setAccountType(account, type) {
   save();
   showToast(`${account} → ${type === 'personal' ? '🏠 Personal' : '🏢 Business'}`);
   render();
+}
+
+// v1.50: Month comparison line chart — this month cumulative vs last month
+function renderMonthCompareChart() {
+  const canvas = document.getElementById('monthCompareChart');
+  if (!canvas) return;
+  if (_chartInstances.monthCompare) _chartInstances.monthCompare.destroy();
+
+  const today = new Date();
+  const Y = today.getFullYear();
+  const M = today.getMonth(); // 0-indexed
+  const todayDay = today.getDate();
+
+  // Days in this month
+  const thisMonthDays = new Date(Y, M + 1, 0).getDate();
+  const lastMonthDays = new Date(Y, M, 0).getDate();
+  const maxDays = Math.max(thisMonthDays, lastMonthDays);
+
+  // Compute cumulative spend per day for this month + last month
+  const thisCum = new Array(maxDays + 1).fill(0);
+  const lastCum = new Array(maxDays + 1).fill(0);
+
+  const thisMonthStart = `${Y}-${String(M + 1).padStart(2, '0')}-01`;
+  const lastMonthDate = new Date(Y, M - 1, 1);
+  const lastMonthStart = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+  const lastMonthEnd = `${Y}-${String(M + 1).padStart(2, '0')}-01`; // exclusive
+
+  // Walk transactions
+  txns.forEach(t => {
+    if (!t.date) return;
+    if (t.date >= thisMonthStart) {
+      const day = parseInt(t.date.slice(8, 10));
+      if (day <= thisMonthDays) thisCum[day] = (thisCum[day] || 0) + t.amount;
+    } else if (t.date >= lastMonthStart && t.date < lastMonthEnd) {
+      const day = parseInt(t.date.slice(8, 10));
+      if (day <= lastMonthDays) lastCum[day] = (lastCum[day] || 0) + t.amount;
+    }
+  });
+
+  // Convert to cumulative
+  for (let i = 1; i <= maxDays; i++) {
+    thisCum[i] += thisCum[i - 1];
+    lastCum[i] += lastCum[i - 1];
+  }
+
+  // Labels: day 1, 2, ... maxDays
+  const labels = [];
+  for (let i = 1; i <= maxDays; i++) labels.push(String(i));
+
+  // For this month, only fill data through today; rest should be null (forecast line draws there)
+  const thisData = thisCum.slice(1, maxDays + 1).map((v, i) => (i + 1) <= todayDay ? v : null);
+  const lastData = lastCum.slice(1, maxDays + 1);
+
+  const sym = currencySymbol();
+  _chartInstances.monthCompare = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'This month (so far)',
+          data: thisData,
+          borderColor: '#667eea',
+          backgroundColor: 'rgba(102,126,234,0.15)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 3,
+        },
+        {
+          label: 'Last month',
+          data: lastData,
+          borderColor: '#8fa3b8',
+          borderDash: [6, 4],
+          fill: false,
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${sym}${(ctx.raw || 0).toFixed(2)}`,
+          },
+        },
+      },
+      scales: {
+        x: { title: { display: true, text: 'Day of month' } },
+        y: { beginAtZero: true, title: { display: true, text: `Cumulative ${sym}` } },
+      },
+    },
+  });
+
+  // Summary stats
+  const thisTotal = thisCum[todayDay] || 0;
+  // Last month same day
+  const lastSameDay = lastCum[Math.min(todayDay, lastMonthDays)] || 0;
+  const lastFullMonth = lastCum[lastMonthDays] || 0;
+  const diff = thisTotal - lastSameDay;
+  const diffPct = lastSameDay > 0 ? ((diff / lastSameDay) * 100).toFixed(0) : 0;
+  const arrow = diff >= 0 ? '⬆️' : '⬇️';
+  const color = diff >= 0 ? 'var(--danger)' : 'var(--success)';
+  const stats = document.getElementById('monthCompareStats');
+  if (stats) {
+    stats.innerHTML = `
+      <div style="background: var(--bg-soft); padding: 12px; border-radius: 8px;">
+        <div>By day ${todayDay} this month: <strong>${sym}${thisTotal.toFixed(2)}</strong></div>
+        <div>By day ${todayDay} last month: <strong>${sym}${lastSameDay.toFixed(2)}</strong></div>
+        <div style="margin-top: 4px;">${arrow} <span style="color: ${color}; font-weight: 700;">${diff >= 0 ? '+' : ''}${sym}${Math.abs(diff).toFixed(2)} (${diffPct}%)</span> ${diff >= 0 ? 'more' : 'less'} so far</div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Last month total: ${sym}${lastFullMonth.toFixed(2)}</div>
+      </div>`;
+  }
+}
+
+// v1.50: Forecast chart — actual + projected rest of month
+function renderForecastChart() {
+  const canvas = document.getElementById('forecastChart');
+  if (!canvas) return;
+  if (_chartInstances.forecast) _chartInstances.forecast.destroy();
+
+  const today = new Date();
+  const Y = today.getFullYear();
+  const M = today.getMonth();
+  const todayDay = today.getDate();
+  const monthDays = new Date(Y, M + 1, 0).getDate();
+  const monthStart = `${Y}-${String(M + 1).padStart(2, '0')}-01`;
+  const todayStr = today.toISOString().split('T')[0];
+
+  // Actual cumulative this month so far
+  const actualCum = new Array(monthDays + 1).fill(0);
+  txns.forEach(t => {
+    if (t.date >= monthStart && t.date <= todayStr) {
+      const day = parseInt(t.date.slice(8, 10));
+      if (day <= monthDays) actualCum[day] += t.amount;
+    }
+  });
+  for (let i = 1; i <= monthDays; i++) actualCum[i] += actualCum[i - 1];
+
+  // Compute daily average over last 30 days
+  const thirtyAgo = new Date(today); thirtyAgo.setDate(thirtyAgo.getDate() - 30);
+  const last30Total = txns.filter(t => t.date >= thirtyAgo.toISOString().split('T')[0]).reduce((s, t) => s + t.amount, 0);
+  const dailyAvg = last30Total / 30;
+
+  // Predicted bills in remaining days
+  const subs = (typeof detectSubscriptions === 'function') ? detectSubscriptions() : [];
+  const upcomingBills = {};
+  const monthEnd = new Date(Y, M + 1, 0);
+  subs.forEach(s => {
+    const next = new Date(s.nextDate);
+    if (next > today && next <= monthEnd) {
+      const day = next.getDate();
+      upcomingBills[day] = (upcomingBills[day] || 0) + s.avgAmount;
+    }
+  });
+
+  // Build forecast cumulative line (from today onwards)
+  const forecastCum = new Array(monthDays + 1).fill(null);
+  forecastCum[todayDay] = actualCum[todayDay]; // connect to actual
+  for (let i = todayDay + 1; i <= monthDays; i++) {
+    const prev = forecastCum[i - 1];
+    const billOnDay = upcomingBills[i] || 0;
+    forecastCum[i] = prev + dailyAvg + billOnDay;
+  }
+
+  // Actual line — show through today only
+  const actualData = actualCum.slice(1, monthDays + 1).map((v, i) => (i + 1) <= todayDay ? v : null);
+  const forecastData = forecastCum.slice(1, monthDays + 1);
+
+  const labels = [];
+  for (let i = 1; i <= monthDays; i++) labels.push(String(i));
+
+  const sym = currencySymbol();
+  _chartInstances.forecast = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Actual',
+          data: actualData,
+          borderColor: '#43e97b',
+          backgroundColor: 'rgba(67,233,123,0.15)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 3,
+        },
+        {
+          label: 'Forecast',
+          data: forecastData,
+          borderColor: '#f6a93b',
+          backgroundColor: 'rgba(246,169,59,0.1)',
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${sym}${(ctx.raw || 0).toFixed(2)}` } },
+      },
+      scales: {
+        x: { title: { display: true, text: 'Day of month' } },
+        y: { beginAtZero: true, title: { display: true, text: `Cumulative ${sym}` } },
+      },
+    },
+  });
+
+  const projectedEnd = forecastCum[monthDays] || actualCum[todayDay];
+  const stats = document.getElementById('forecastChartStats');
+  if (stats) {
+    stats.innerHTML = `
+      <div style="background: var(--bg-soft); padding: 12px; border-radius: 8px;">
+        <div>Spent so far: <strong>${sym}${actualCum[todayDay].toFixed(2)}</strong> (${todayDay} days in)</div>
+        <div>Daily avg (last 30 days): <strong>${sym}${dailyAvg.toFixed(2)}</strong></div>
+        <div>Bills coming: <strong>${sym}${Object.values(upcomingBills).reduce((s,v)=>s+v,0).toFixed(2)}</strong> across ${Object.keys(upcomingBills).length} dates</div>
+        <div style="margin-top: 4px;">📍 Projected month-end total: <strong style="color: var(--accent);">${sym}${projectedEnd.toFixed(2)}</strong></div>
+      </div>`;
+  }
 }
 
 // v1.31: Period stats — today, this week, MTD, YTD with income comparison
@@ -6757,6 +7004,8 @@ function render() {
   if (document.getElementById('subscriptionsList')) renderSubscriptions();
   if (document.getElementById('billCalendar')) renderBillCalendar();
   if (document.getElementById('weeklyRecap')) renderWeeklyRecap();
+  if (document.getElementById('monthCompareChart')) renderMonthCompareChart();
+  if (document.getElementById('forecastChart')) renderForecastChart();
   if (document.getElementById('goalsList')) renderGoals();
   if (document.getElementById('assetsList')) renderNetWorth();
   if (document.getElementById('potsList')) renderPots();
