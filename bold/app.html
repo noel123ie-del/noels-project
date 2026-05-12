@@ -1343,14 +1343,18 @@ function renderMarkdown(text) {
 
 // v1.46: Suggested prompts at empty state
 const SUGGESTED_PROMPTS = [
-  'How much did I spend this week?',
-  'What\'s my biggest category?',
-  'Compare this month to last',
-  'Plan a savings strategy',
-  'Find cheaper alternatives',
+  'How am I doing this week?',
+  'Where\'s my money going?',
   'Am I spending too much on coffee?',
-  'Should I afford €50 today?',
   'How can I save €200/month?',
+  'Show me my biggest expense',
+  'Cheaper alternatives to Tesco?',
+  'Should I afford €50 today?',
+  'How am I doing vs last month?',
+  'What subscriptions can I cancel?',
+  'Plan a 3-month savings goal',
+  'Any unusual spending this week?',
+  'What\'s draining my money?',
 ];
 
 function renderSuggestions() {
@@ -1374,15 +1378,33 @@ async function callClaudeAPIStream(question, onChunk) {
   try {
     const sym = baseCurrency === 'EUR' ? '€' : baseCurrency === 'GBP' ? '£' : '$';
     const modelToUse = anthropicModel === 'auto' ? pickModelForQuestion(question) : anthropicModel;
-    const sysPrompt = `You are Thrift — a warm, sharp Irish friend who happens to know everything about ${brandName}'s money. Talk like a real person, not a bot.
+    const sysPrompt = `You are Thrift — a warm, supportive Irish friend who knows ${brandName}'s money inside out. You're the friend who actually listens, doesn't judge, and quietly looks out for them. Talk like a person — never robotic.
 
-TONE: Casual, direct, contractions OK. Brief (2-3 sentences unless asked for a plan). Address as ${brandName} occasionally. Have opinions. Acknowledge feelings.
+PERSONALITY:
+- Warm and encouraging. Money stress is real — acknowledge it gently.
+- Friendly contractions: "you're", "I'd", "let's", "we can".
+- Conversational fillers OK: "honestly", "look", "yeah", "ah", "fair enough".
+- Use ${brandName}'s name occasionally — feels personal, not every message.
+- Have opinions but offer them softly: "I'd probably..." not "You should...".
+- Celebrate wins: "nice one!", "good week", "that's solid".
+- Empathise on tough news: "ouch, that's a chunky one", "tough month", "happens to all of us".
+- Throw in a light joke or warm aside when it fits — never forced.
+- Ask one curious follow-up when it'd help. Not every message.
 
-CONTENT: Reference REAL numbers from data. Suggest concrete cuts with savings. Irish context: Lidl/Aldi 30% cheaper. bonkers.ie for energy. GoMo €12.99/mo. Flag unusual transactions. If data can't answer, say so honestly.
+CONTENT:
+- Always quote REAL numbers from their data — "${sym}127 on coffee this week, up from ${sym}90 last week".
+- Concrete suggestions with savings: "Cancel Netflix → ${sym}180/year back".
+- Irish context: Lidl/Aldi 30% cheaper than Tesco. bonkers.ie for energy switching. GoMo ${sym}12.99/mo mobile.
+- Notice unusual stuff and ask about it kindly: "that ${sym}450 on Tuesday — anything I should know about?".
+- If you can't answer from data, say so honestly + suggest what'd help.
+- Keep it brief — 2-3 sentences by default. Longer only for plans or breakdowns.
 
-FORMATTING: Use ${sym} for amounts. Plain prose or bullet lists when listing. NO markdown headers.
+FORMATTING:
+- ${sym} for amounts. Numbers nicely formatted (${sym}1,234.56).
+- Plain prose. Use bullets only when listing 3+ items.
+- No markdown headers in casual replies.
 
-REMEMBER prior messages in this conversation.
+REMEMBER prior messages — context flows.
 
 ${buildAIContext()}`;
 
@@ -4329,10 +4351,13 @@ function toggleFloatingChat() {
   } else {
     panel.style.display = 'flex';
     bubble.style.transform = 'scale(0.9)';
-    // Show welcome + suggestions if empty
+    // Show warm welcome + suggestions if empty
     const log = document.getElementById('floatChatLog');
     if (log && log.children.length === 0) {
-      log.innerHTML = `<div class="ai-msg bot">👋 Hi! Ask me anything about your spending — or tap a suggestion below.</div>`;
+      const hour = new Date().getHours();
+      const greeting = hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Evening';
+      const name = (typeof brandName !== 'undefined' && brandName && brandName !== 'Noel') ? `, ${brandName}` : '';
+      log.innerHTML = `<div class="ai-msg bot">👋 ${greeting}${name}! What's on your mind — checking spending, planning ahead, or just curious how the week's going? Tap a suggestion or just ask.</div>`;
     }
     renderSuggestions();
     setTimeout(() => document.getElementById('floatChatInput')?.focus(), 100);
@@ -4713,23 +4738,30 @@ function answerQuestion(q) {
   // ===== Greetings & small talk =====
   if (/^(hi|hello|hey|yo|hiya|howdy|hola|good (morning|afternoon|evening)|what'?s up)[\s!.?]*$/i.test(lower)) {
     const greetings = [
-      `👋 Hi! I'm Thrift. I can answer anything about your spending — try <em>"how much this week?"</em>`,
-      `Hey there! Want to know your biggest expense, or get cheaper alternatives for something?`,
-      `Hello! Ask me about coffee, groceries, subscriptions, your budget, or net worth — I've got the data.`,
+      `Hey! Good to see you 👋 What's on your mind — money-wise?`,
+      `Howdy! Ready when you are — checking spending, planning, or just curious?`,
+      `Hi there! How can I help today — quick lookup, advice, or a bit of a dig through the numbers?`,
+      `Hey ${brandName !== 'Noel' ? brandName + ' ' : ''}— what'd you like to look at?`,
     ];
     return greetings[Math.floor(Math.random() * greetings.length)];
   }
   if (/^(thanks|thank you|cheers|ta|nice|cool|great|awesome|good)[\s!.?]*$/i.test(lower)) {
-    return `You're welcome! 😊 Anything else?`;
+    const replies = [`Anytime 😊`, `No bother!`, `Glad to help — anything else?`, `Cheers! Here whenever you need me.`];
+    return replies[Math.floor(Math.random() * replies.length)];
   }
   if (/^(ok|okay|got it|sure|alright)[\s!.?]*$/i.test(lower)) {
-    return `👍 Ask me anything else when you're ready.`;
+    return `👍 Right you are. Anything else on your mind?`;
   }
   if (/^(bye|goodbye|see ya|later|cya|adios)[\s!.?]*$/i.test(lower)) {
-    return `👋 Goodbye! I'm here whenever you need me.`;
+    return `Take care! 👋 Pop back anytime.`;
   }
   if (/how (are you|r u|you doing)/i.test(lower)) {
-    return `I'm great, thanks! Ready to dig into your finances. What would you like to know?`;
+    const moods = [
+      `Doing grand, thanks for asking! Yourself? More importantly — anything I can help with?`,
+      `All good here. Ready to dig into whatever's on your mind. What's up?`,
+      `Can't complain. So — what brings you in today?`,
+    ];
+    return moods[Math.floor(Math.random() * moods.length)];
   }
   if (/who are you|what are you|your name/i.test(lower)) {
     return `I'm Thrift's AI assistant 🤖 — I read your transactions, budgets, goals, and pots, and answer questions in plain English.`;
