@@ -794,6 +794,30 @@
     </div>
 
     <div class="form-card">
+      <h3>🗣️ AI Voice</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Pick the voice Thrift uses when speaking. Premium options sound like real humans.</p>
+      <div class="form-group">
+        <label>Voice engine</label>
+        <select id="voiceEngine" onchange="saveVoiceConfig()">
+          <option value="browser">🆓 Browser (built-in, free, robotic)</option>
+          <option value="elevenlabs">🎙️ ElevenLabs (paid, sounds human)</option>
+        </select>
+      </div>
+      <div class="form-group" id="browserVoiceWrap">
+        <label>Browser voice (auto-picks best)</label>
+        <select id="browserVoice" onchange="saveVoiceConfig()"></select>
+      </div>
+      <div class="form-group" id="elevenWrap" style="display:none;">
+        <label>ElevenLabs API key</label>
+        <input type="password" id="elevenKey" placeholder="sk_... from elevenlabs.io" oninput="saveVoiceConfig()">
+        <label style="margin-top:8px;">Voice ID</label>
+        <input type="text" id="elevenVoiceId" placeholder="EXAVITQu4vr4xnSDxMaL (default: Bella)" oninput="saveVoiceConfig()">
+        <p style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Free 10k chars/month. Get key + browse voices at <a href="https://elevenlabs.io/app/voice-library" target="_blank">elevenlabs.io</a></p>
+      </div>
+      <button class="btn btn-primary" onclick="testVoice()" style="width:100%; margin-top:8px;">🔊 Test voice</button>
+    </div>
+
+    <div class="form-card">
       <h3>🎤 Voice Quick-Add</h3>
       <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Try saying "Spent fifteen euro on coffee" — works in Chrome/Edge</p>
       <button class="voice-btn" id="voiceBtn" onclick="toggleVoiceInput()">🎤 Start Listening</button>
@@ -4134,22 +4158,135 @@ function stripHTML(html) {
   return tmp.textContent || tmp.innerText || '';
 }
 
-function speakAloud(text) {
-  if (!('speechSynthesis' in window)) return;
-  // Cancel any in-progress speech
-  window.speechSynthesis.cancel();
-  const clean = stripHTML(text);
-  if (!clean.trim()) return;
-  const utter = new SpeechSynthesisUtterance(clean);
-  utter.lang = 'en-GB';
-  utter.rate = 1.05;
-  utter.pitch = 1;
-  utter.volume = 1;
-  // Try to pick an English voice
+// v1.47: Voice config — browser default OR ElevenLabs for human-quality
+let voiceEngine = localStorage.getItem('voiceEngine') || 'browser';
+let elevenKey = localStorage.getItem('elevenKey') || '';
+let elevenVoiceId = localStorage.getItem('elevenVoiceId') || 'EXAVITQu4vr4xnSDxMaL'; // Bella default
+let preferredBrowserVoice = localStorage.getItem('preferredBrowserVoice') || '';
+
+function saveVoiceConfig() {
+  voiceEngine = document.getElementById('voiceEngine')?.value || 'browser';
+  elevenKey = (document.getElementById('elevenKey')?.value || '').trim();
+  elevenVoiceId = (document.getElementById('elevenVoiceId')?.value || '').trim() || 'EXAVITQu4vr4xnSDxMaL';
+  preferredBrowserVoice = document.getElementById('browserVoice')?.value || '';
+  localStorage.setItem('voiceEngine', voiceEngine);
+  localStorage.setItem('elevenKey', elevenKey);
+  localStorage.setItem('elevenVoiceId', elevenVoiceId);
+  localStorage.setItem('preferredBrowserVoice', preferredBrowserVoice);
+  // Show/hide relevant section
+  const bw = document.getElementById('browserVoiceWrap');
+  const ew = document.getElementById('elevenWrap');
+  if (bw) bw.style.display = voiceEngine === 'browser' ? 'block' : 'none';
+  if (ew) ew.style.display = voiceEngine === 'elevenlabs' ? 'block' : 'none';
+}
+
+function populateVoiceList() {
+  const sel = document.getElementById('browserVoice');
+  if (!sel || !('speechSynthesis' in window)) return;
   const voices = window.speechSynthesis.getVoices();
-  const enVoice = voices.find(v => /en[-_](GB|IE)/.test(v.lang)) || voices.find(v => v.lang.startsWith('en')) || voices[0];
-  if (enVoice) utter.voice = enVoice;
-  window.speechSynthesis.speak(utter);
+  if (!voices.length) return;
+  const enVoices = voices.filter(v => v.lang.startsWith('en'));
+  sel.innerHTML = '<option value="">Auto (pick best)</option>' + enVoices.map(v => `<option value="${v.name}">${v.name} (${v.lang})${v.localService ? '' : ' · cloud'}</option>`).join('');
+  if (preferredBrowserVoice) sel.value = preferredBrowserVoice;
+}
+
+function testVoice() {
+  speakAloud("Hey there, I'm Thrift. This is what my voice sounds like.");
+}
+
+async function speakViaElevenLabs(text) {
+  if (!elevenKey) { speakAloud_browser(text); return; }
+  try {
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenVoiceId}`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': elevenKey,
+        'content-type': 'application/json',
+        'accept': 'audio/mpeg',
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_turbo_v2_5',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3 },
+      }),
+    });
+    if (!res.ok) {
+      console.error('ElevenLabs error', res.status, await res.text());
+      // Fall back to browser
+      return speakAloud_browser(text);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.play();
+    audio.onended = () => URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error(e);
+    speakAloud_browser(text);
+  }
+}
+
+function pickBestVoice() {
+  if (!('speechSynthesis' in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  // Prefer high-quality natural voices in this order:
+  // 1. Apple "premium" / "enhanced" voices (Samantha, Daniel, Karen, Moira)
+  // 2. Google Cloud voices ("Google UK English Female/Male")
+  // 3. Microsoft Natural voices
+  // 4. Any Irish/UK voice
+  // 5. Any English voice
+  const priorities = [
+    /Moira/i,                      // Apple Irish female
+    /Karen/i,                       // Apple Australian/UK female
+    /Daniel/i,                      // Apple UK male
+    /Samantha/i,                    // Apple US female (very natural)
+    /Google UK English Female/i,
+    /Google UK English Male/i,
+    /Microsoft.*Natural.*en-(GB|IE|US)/i,
+    /Microsoft.*Aria|Jenny|Guy.*en-(GB|US)/i,
+    /en-IE/i,
+    /en-GB/i,
+    /en-US/i,
+    /^en/i,
+  ];
+  for (const re of priorities) {
+    const v = voices.find(v => re.test(v.name) || re.test(v.lang));
+    if (v) return v;
+  }
+  return voices[0];
+}
+
+function speakAloud(text) {
+  const clean = stripHTML(text).replace(/[⚡🎯🧠]/g, '').trim();
+  if (!clean) return;
+  if (voiceEngine === 'elevenlabs' && elevenKey) {
+    speakViaElevenLabs(clean);
+  } else {
+    speakAloud_browser(clean);
+  }
+}
+
+function speakAloud_browser(text) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const clean = stripHTML(text).replace(/[⚡🎯🧠]/g, '').trim();
+  if (!clean) return;
+  const sentences = clean.match(/[^.!?]+[.!?]+|\S[^.!?]*$/g) || [clean];
+  let voice;
+  if (preferredBrowserVoice) {
+    voice = window.speechSynthesis.getVoices().find(v => v.name === preferredBrowserVoice);
+  }
+  if (!voice) voice = pickBestVoice();
+  sentences.forEach((sentence) => {
+    const utter = new SpeechSynthesisUtterance(sentence.trim());
+    utter.lang = voice?.lang || 'en-GB';
+    utter.rate = 1.0;
+    utter.pitch = 1.0;
+    utter.volume = 1.0;
+    if (voice) utter.voice = voice;
+    window.speechSynthesis.speak(utter);
+  });
 }
 
 function toggleAiSpeak() {
@@ -6563,6 +6700,15 @@ function render() {
   if (document.getElementById('importHistory')) renderImportHistory();
   // v1.39 undo history
   if (document.getElementById('undoHistory')) renderUndoHistory();
+  // v1.47 voice config sync
+  if (document.getElementById('voiceEngine')) {
+    document.getElementById('voiceEngine').value = voiceEngine;
+    document.getElementById('elevenKey').value = elevenKey;
+    document.getElementById('elevenVoiceId').value = elevenVoiceId === 'EXAVITQu4vr4xnSDxMaL' ? '' : elevenVoiceId;
+    document.getElementById('browserVoiceWrap').style.display = voiceEngine === 'browser' ? 'block' : 'none';
+    document.getElementById('elevenWrap').style.display = voiceEngine === 'elevenlabs' ? 'block' : 'none';
+    populateVoiceList();
+  }
   // v1.14 context UI
   if (document.getElementById('accountTypeList')) renderAccountTypeList();
   // v1.16 license status
