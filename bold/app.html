@@ -1218,6 +1218,41 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
   </div>
 </div>
 
+<!-- v1.53: Edit Transaction modal — replaces prompts with nice UI -->
+<div id="editTxnModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:99996; align-items:center; justify-content:center; padding:16px;">
+  <div style="max-width:460px; width:100%; background:var(--bg-card); color:var(--text); border-radius:16px; padding:20px; box-shadow:0 20px 60px rgba(0,0,0,0.5); max-height:92vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 style="margin:0;">✏️ Edit transaction</h3>
+      <button onclick="closeEditTxnModal()" style="background:none; border:none; color:var(--text-muted); font-size:1.6rem; cursor:pointer; line-height:1;">×</button>
+    </div>
+    <div id="editTxnDesc" style="font-weight:700; margin-bottom:4px;"></div>
+    <div id="editTxnMeta" style="color:var(--text-muted); font-size:0.85rem; margin-bottom:14px;"></div>
+
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>Amount</label>
+      <input type="number" step="0.01" id="editTxnAmount" style="font-size:1.2rem; padding:10px;">
+    </div>
+
+    <label style="font-weight:700; font-size:0.85rem; margin-bottom:6px; display:block;">Category</label>
+    <div id="editTxnCatTiles" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(95px, 1fr)); gap:6px; margin-bottom:14px;"></div>
+
+    <label style="display:flex; align-items:center; gap:8px; padding:10px; background:var(--bg-soft); border-radius:8px; cursor:pointer; margin-bottom:10px;" id="editTxnBulkLabel">
+      <input type="checkbox" id="editTxnApplyAll">
+      <span id="editTxnApplyAllText" style="font-size:0.9rem;">Apply category to all others with this name</span>
+    </label>
+
+    <label style="display:flex; align-items:center; gap:8px; padding:10px; background:var(--bg-soft); border-radius:8px; cursor:pointer; margin-bottom:14px;">
+      <input type="checkbox" id="editTxnTax">
+      <span style="font-size:0.9rem;">💼 Mark tax-deductible (business expense)</span>
+    </label>
+
+    <div style="display:flex; gap:10px;">
+      <button onclick="closeEditTxnModal()" style="flex:1; padding:12px; background:transparent; color:var(--text-muted); border:1px solid var(--border); border-radius:10px; cursor:pointer; font-weight:700;">Cancel</button>
+      <button onclick="saveEditTxnModal()" class="btn btn-primary" style="flex:2; padding:12px;">Save changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- v1.52: PIN lock screen -->
 <div id="pinLockScreen" style="display:none; position:fixed; inset:0; background:linear-gradient(135deg, #0f1419, #2a3142); color:white; z-index:99998; align-items:center; justify-content:center; padding:20px;">
   <div style="max-width: 360px; text-align: center; width: 100%;">
@@ -3230,55 +3265,87 @@ function showToast(msg) {
   }, 2500);
 }
 
+// v1.53: Edit transaction via modal (replaces ugly prompts)
+let _editingTxnId = null;
+let _editingSelectedCat = null;
+
 function editTxn(id) {
   const txn = txns.find(t => t.id === id);
   if (!txn) return;
-  // Snapshot for undo before any change
-  snapshotForUndo(`Edit "${txn.desc}"`);
+  _editingTxnId = id;
+  _editingSelectedCat = txn.category;
 
-  // Step 1: amount
-  const newAmount = prompt(`Edit amount for "${txn.desc}":\n\nCurrent: €${txn.amount.toFixed(2)}`, txn.amount.toFixed(2));
-  if (newAmount === null) return; // user cancelled — don't snapshot
-  if (newAmount !== '') {
-    const amount = parseFloat(newAmount);
-    if (amount && amount > 0) txn.amount = amount;
+  document.getElementById('editTxnDesc').textContent = txn.desc;
+  document.getElementById('editTxnMeta').textContent = `${txn.date} · ${txn.account || ''}`;
+  document.getElementById('editTxnAmount').value = txn.amount.toFixed(2);
+  document.getElementById('editTxnTax').checked = !!txn.tax;
+  document.getElementById('editTxnApplyAll').checked = false;
+
+  // Build category tiles
+  const tilesEl = document.getElementById('editTxnCatTiles');
+  tilesEl.innerHTML = categories.map(cat => {
+    const emoji = categoryEmojis[cat] || '📦';
+    const isActive = cat === _editingSelectedCat;
+    return `<div class="cat-tile${isActive ? ' selected' : ''}" data-cat="${cat}" onclick="pickEditCat('${cat.replace(/'/g, "\\'")}')"><span class="emoji">${emoji}</span><span class="name">${cat}</span></div>`;
+  }).join('');
+
+  // Bulk count
+  const same = txns.filter(t => t.id !== id && (t.desc || '').toLowerCase().trim() === (txn.desc || '').toLowerCase().trim()).length;
+  const bulkLabel = document.getElementById('editTxnApplyAllText');
+  const bulkWrap = document.getElementById('editTxnBulkLabel');
+  if (same > 0) {
+    bulkLabel.textContent = `Also apply category to ${same} other transaction${same > 1 ? 's' : ''} with "${txn.desc}"`;
+    bulkWrap.style.display = 'flex';
+  } else {
+    bulkWrap.style.display = 'none';
   }
 
-  // Step 2: optional category change
-  const catList = categories.map((c, i) => `${i + 1}. ${c}`).join('\n');
-  const choice = prompt(`Category for "${txn.desc}"?\n\nCurrent: ${txn.category}\n\nEnter number to change, or leave blank to keep:\n${catList}`);
-  if (choice && /^\d+$/.test(choice.trim())) {
-    const idx = parseInt(choice.trim()) - 1;
-    if (idx >= 0 && idx < categories.length) {
-      const newCat = categories[idx];
-      const oldCat = txn.category;
-      txn.category = newCat;
-      learnCategoryRule(txn.desc, newCat);
+  document.getElementById('editTxnModal').style.display = 'flex';
+}
 
-      // BULK: check if other transactions have the same merchant name
-      const sameMerchant = txns.filter(t => t.id !== id && (t.desc || '').toLowerCase().trim() === (txn.desc || '').toLowerCase().trim() && t.category !== newCat);
-      if (sameMerchant.length > 0) {
-        if (confirm(`Found ${sameMerchant.length} other transaction${sameMerchant.length > 1 ? 's' : ''} with "${txn.desc}".\n\nApply ${newCat} category to all of them too?`)) {
-          sameMerchant.forEach(t => t.category = newCat);
-          showToast(`✅ Updated ${sameMerchant.length + 1} transactions to ${newCat}`);
-        } else {
-          showToast(`✅ This transaction → ${newCat}. Future imports will use this rule.`);
-        }
-      } else {
-        showToast(`✅ Will categorise "${txn.desc}" as ${newCat} from now on`);
-      }
+function pickEditCat(cat) {
+  _editingSelectedCat = cat;
+  document.querySelectorAll('#editTxnCatTiles .cat-tile').forEach(t => {
+    t.classList.toggle('selected', t.dataset.cat === cat);
+  });
+}
+
+function closeEditTxnModal() {
+  document.getElementById('editTxnModal').style.display = 'none';
+  _editingTxnId = null;
+}
+
+function saveEditTxnModal() {
+  if (!_editingTxnId) return closeEditTxnModal();
+  const txn = txns.find(t => t.id === _editingTxnId);
+  if (!txn) return closeEditTxnModal();
+
+  snapshotForUndo(`Edit "${txn.desc}"`);
+
+  const newAmount = parseFloat(document.getElementById('editTxnAmount').value);
+  if (newAmount && newAmount > 0) txn.amount = newAmount;
+
+  const oldCat = txn.category;
+  if (_editingSelectedCat && _editingSelectedCat !== oldCat) {
+    txn.category = _editingSelectedCat;
+    learnCategoryRule(txn.desc, _editingSelectedCat);
+    if (document.getElementById('editTxnApplyAll').checked) {
+      const same = txns.filter(t => t.id !== _editingTxnId && (t.desc || '').toLowerCase().trim() === (txn.desc || '').toLowerCase().trim() && t.category !== _editingSelectedCat);
+      same.forEach(t => t.category = _editingSelectedCat);
+      showToast(`✅ Updated ${same.length + 1} transactions to ${_editingSelectedCat}`);
+    } else {
+      showToast(`✅ Category changed to ${_editingSelectedCat}`);
     }
   }
 
-  // Step 3: optional tax flag toggle
-  const taxNow = txn.tax ? 'YES' : 'NO';
-  const taxChoice = prompt(`Mark as tax-deductible (business expense)?\n\nCurrently: ${taxNow}\n\nType Y to toggle, leave blank to keep:`);
-  if (taxChoice && /^y/i.test(taxChoice.trim())) {
-    txn.tax = !txn.tax;
-    showToast(txn.tax ? '💼 Marked tax-deductible' : '✅ Tax flag removed');
+  const wantTax = document.getElementById('editTxnTax').checked;
+  if (wantTax !== !!txn.tax) {
+    txn.tax = wantTax;
   }
+
   save();
   render();
+  closeEditTxnModal();
 }
 
 function deleteTxn(id) {
