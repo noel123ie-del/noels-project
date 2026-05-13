@@ -27,6 +27,18 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Thrift">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- v1.57: Mobile debug console — only loads if ?debug=1 or localStorage.debugMode=true -->
+  <script>
+    (function() {
+      const wantDebug = new URLSearchParams(location.search).get('debug') === '1' || localStorage.getItem('debugMode') === 'true';
+      if (wantDebug) {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/eruda';
+        s.onload = function() { eruda.init(); console.log('🐛 Debug mode ON. Tap the gear icon bottom-right to open console.'); };
+        document.head.appendChild(s);
+      }
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script>if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';</script>
@@ -1129,6 +1141,25 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
     </div>
 
     <div class="form-card">
+      <h3>🐛 Mobile Debug Mode</h3>
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">Turn this on, screenshot errors on your phone, send to support.</p>
+      <button class="btn btn-primary" onclick="toggleDebugMode()" id="debugToggleBtn" style="width:100%;">🐛 Enable Debug Console</button>
+      <div id="debugStatus" style="margin-top:8px; font-size:0.85rem; color: var(--text-muted);"></div>
+      <details style="margin-top: 12px;">
+        <summary style="cursor: pointer; font-weight: 700; color: var(--accent); font-size: 0.85rem;">How to use on phone</summary>
+        <ol style="margin: 8px 0 0 18px; line-height: 1.7; font-size: 0.85rem;">
+          <li>On this device, tap 'Enable Debug Console'</li>
+          <li>Open the same URL on your phone (or add <code>?debug=1</code> to the URL)</li>
+          <li>You'll see a small gear ⚙️ icon bottom-right of the screen</li>
+          <li>Tap it → full developer console opens with Console, Network, Elements tabs</li>
+          <li>Reproduce the bug</li>
+          <li>Screenshot any red errors → send to support</li>
+        </ol>
+      </details>
+      <button class="btn btn-primary" onclick="exportDiagnostics()" style="width:100%; margin-top:10px; background:var(--accent-2);">📋 Copy diagnostic info to clipboard</button>
+    </div>
+
+    <div class="form-card">
       <h3>🖥️ Backend Mode (Reseller setup)</h3>
       <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 0.9rem;">For reselling: route API calls through your own server so customers don't see your keys.</p>
       <label style="display:flex; align-items:center; gap:8px; padding:10px; background:var(--bg-soft); border-radius:8px; cursor:pointer;">
@@ -1734,6 +1765,57 @@ function ensureAccountExists(name) {
     else if (/\bbusiness\b|\bbiz\b/i.test(name)) accountTypes[name] = 'business';
     else accountTypes[name] = 'personal';
     save();
+  }
+}
+
+// v1.57: Mobile debug mode toggle + diagnostics export
+function toggleDebugMode() {
+  const isOn = localStorage.getItem('debugMode') === 'true';
+  if (isOn) {
+    localStorage.removeItem('debugMode');
+    showToast('🐛 Debug mode OFF (reload page to take effect)');
+  } else {
+    localStorage.setItem('debugMode', 'true');
+    showToast('🐛 Debug mode ON (reload page to see console)');
+  }
+  renderDebugStatus();
+}
+function renderDebugStatus() {
+  const el = document.getElementById('debugStatus');
+  if (!el) return;
+  const isOn = localStorage.getItem('debugMode') === 'true';
+  const btn = document.getElementById('debugToggleBtn');
+  if (btn) btn.textContent = isOn ? '🐛 Disable Debug Console' : '🐛 Enable Debug Console';
+  el.innerHTML = isOn
+    ? '<span style="color:var(--success);">✅ Debug ON. Reload page → gear icon appears bottom-right of screen → tap for full console.</span>'
+    : 'Debug is OFF. Enable to troubleshoot mobile issues.';
+}
+
+function exportDiagnostics() {
+  const info = {
+    timestamp: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+    url: location.href,
+    platform: navigator.platform,
+    language: navigator.language,
+    screen: { w: screen.width, h: screen.height, dpr: window.devicePixelRatio },
+    viewport: { w: window.innerWidth, h: window.innerHeight },
+    localStorage_keys: Object.keys(localStorage),
+    txns_count: typeof txns !== 'undefined' ? txns.length : 'N/A',
+    income_count: typeof income !== 'undefined' ? income.length : 'N/A',
+    has_anthropic_key: !!localStorage.getItem('anthropicKey'),
+    has_heygen_key: !!localStorage.getItem('heygenKey'),
+    use_backend: localStorage.getItem('useBackend') === 'true',
+    license_expiry: localStorage.getItem('licenseExpiry'),
+    theme: document.documentElement.getAttribute('data-theme'),
+    online: navigator.onLine,
+  };
+  const text = '=== Thrift Diagnostics ===\n' + JSON.stringify(info, null, 2);
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(() => showToast('📋 Diagnostics copied — paste into support email'));
+  } else {
+    // Fallback: show in alert for manual copy
+    prompt('Copy this and send to support:', text);
   }
 }
 
@@ -7797,6 +7879,8 @@ function render() {
   if (document.getElementById('heygenChatMode')) document.getElementById('heygenChatMode').checked = heygenChatMode;
   // v1.56 Backend mode toggle sync
   if (document.getElementById('useBackend')) document.getElementById('useBackend').checked = useBackend;
+  // v1.57 Debug mode status
+  if (document.getElementById('debugStatus')) renderDebugStatus();
   // v1.52 PIN status
   if (document.getElementById('pinStatus')) {
     renderPinStatus();
