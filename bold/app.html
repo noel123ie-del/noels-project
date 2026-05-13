@@ -1425,8 +1425,9 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
   </div>
 </div>
 
-<!-- Back button (top-left, only visible when there's history) -->
+<!-- Back / Forward buttons (top-left) -->
 <button id="backBtn" onclick="goBack()" title="Back" style="display:none; position: fixed; top: 14px; left: 14px; width: 44px; height: 44px; border-radius: 50%; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); font-size: 1.3rem; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1002;">←</button>
+<button id="fwdBtn" onclick="goForward()" title="Forward" style="display:none; position: fixed; top: 14px; left: 64px; width: 44px; height: 44px; border-radius: 50%; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); font-size: 1.3rem; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1002;">→</button>
 
 <!-- FAB - Floating Action Button (moved bottom-left to make room for chat) -->
 <button class="fab" onclick="switchSection(null, 'daily-log')" title="Quick add transaction" style="left: 24px; right: auto;">+</button>
@@ -3618,37 +3619,53 @@ function save() {
 }
 
 window._navHistory = window._navHistory || ['dashboard'];
-function switchSection(event, sectionId, _fromBack) {
+window._navForward = window._navForward || [];
+function _updateNavBtns() {
+  const b = document.getElementById('backBtn');
+  const f = document.getElementById('fwdBtn');
+  if (b) b.style.display = window._navHistory.length > 1 ? 'block' : 'none';
+  if (f) f.style.display = window._navForward.length > 0 ? 'block' : 'none';
+}
+function switchSection(event, sectionId, _fromNav) {
   if (event) event.preventDefault();
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn, .emoji-nav button').forEach(b => b.classList.remove('active'));
   const target = document.getElementById(sectionId);
   if (target) target.classList.add('active');
   if (event?.target) {
-    // Walk up to find the actual <button> if user clicked an inner span/emoji
     let btn = event.target;
     while (btn && btn.tagName !== 'BUTTON') btn = btn.parentElement;
     if (btn) btn.classList.add('active');
   }
-  // Track nav history for back button
-  if (!_fromBack) {
+  if (!_fromNav) {
     const last = window._navHistory[window._navHistory.length - 1];
-    if (last !== sectionId) window._navHistory.push(sectionId);
-    if (window._navHistory.length > 20) window._navHistory.shift();
+    if (last !== sectionId) {
+      window._navHistory.push(sectionId);
+      window._navForward = []; // new nav clears forward stack
+    }
+    if (window._navHistory.length > 30) window._navHistory.shift();
   }
-  const backBtn = document.getElementById('backBtn');
-  if (backBtn) backBtn.style.display = window._navHistory.length > 1 ? 'block' : 'none';
+  _updateNavBtns();
   render();
   window.scrollTo(0, 0);
 }
 function goBack() {
   if (window._navHistory.length <= 1) return;
-  window._navHistory.pop(); // remove current
+  const current = window._navHistory.pop();
+  window._navForward.push(current);
   const prev = window._navHistory[window._navHistory.length - 1];
   switchSection(null, prev, true);
-  // Re-activate the matching nav button
   document.querySelectorAll('.nav-btn, .emoji-nav button').forEach(b => {
     if ((b.getAttribute('onclick') || '').includes(`'${prev}'`)) b.classList.add('active');
+  });
+}
+function goForward() {
+  if (!window._navForward.length) return;
+  const next = window._navForward.pop();
+  window._navHistory.push(next);
+  switchSection(null, next, true);
+  document.querySelectorAll('.nav-btn, .emoji-nav button').forEach(b => {
+    if ((b.getAttribute('onclick') || '').includes(`'${next}'`)) b.classList.add('active');
   });
 }
 
