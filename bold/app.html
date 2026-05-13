@@ -424,7 +424,7 @@
   <button onclick="switchSection(event, 'daily-log')"><span class="emoji">💳</span><span>Spend</span></button>
   <button onclick="switchSection(event, 'insights')"><span class="emoji">💡</span><span>Insights</span></button>
   <button onclick="switchSection(event, 'goals')"><span class="emoji">🎯</span><span>Goals</span></button>
-  <button onclick="switchSection(event, 'transactions')"><span class="emoji">📊</span><span>Stats</span></button>
+  <button onclick="switchSection(event, 'transactions')"><span class="emoji">📋</span><span>Transactions</span></button>
   <button onclick="switchSection(event, 'settings')"><span class="emoji">⚙️</span><span>Settings</span></button>
 </div>
 
@@ -432,6 +432,11 @@
 
   <!-- Dashboard -->
   <div id="dashboard" class="section active">
+    <!-- Quick jump to Transactions -->
+    <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+      <button onclick="switchSection(event, 'transactions')" style="flex:1; min-width:140px; background:linear-gradient(135deg,#667eea,#764ba2); color:white; border:none; padding:12px 16px; border-radius:12px; font-weight:600; cursor:pointer; box-shadow:0 4px 12px rgba(102,126,234,0.3);">📋 View All Transactions</button>
+      <button onclick="switchSection(event, 'daily-log')" style="flex:1; min-width:140px; background:var(--bg-card); color:var(--text); border:1px solid var(--border); padding:12px 16px; border-radius:12px; font-weight:600; cursor:pointer;">💳 Add Spend</button>
+    </div>
     <!-- Spending alerts banner -->
     <div id="alertBanner" style="display: none;"></div>
     <!-- v1.51 Auto-save reminder banner -->
