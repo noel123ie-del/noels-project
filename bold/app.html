@@ -7685,12 +7685,12 @@ function renderAllTransactions() {
       ? `<img class="receipt-thumb" src="${t.receipt}" onclick="event.stopPropagation();viewReceipt(${t.id})" title="View receipt">`
       : `<button class="delete-btn" onclick="event.stopPropagation();attachReceipt(${t.id})" title="Attach receipt photo" style="font-size:1rem;">📷</button>`) : '';
     return `
-    <div class="transaction-item">
+    <div class="transaction-item" ${isIn ? '' : `onclick="editTxn(${t.id})" style="cursor:pointer;"`}>
       <div class="transaction-info">
-        <div class="transaction-desc">${(t.desc || '').replace(/</g,'&lt;')}${taxBadge}${sourceBadge}</div>
+        <div class="transaction-desc">${(t.desc || '').replace(/</g,'&lt;')}${taxBadge}${sourceBadge}${!isIn ? ' <span style="font-size:0.7rem;color:var(--text-muted);">✏️</span>' : ''}</div>
         <div class="transaction-meta">${t.category || (isIn ? 'Income' : '—')} • ${t.account || '—'} • ${t.date}</div>
       </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 8px;" onclick="event.stopPropagation()">
         ${receiptBtn}
         <div class="transaction-amount" style="color:${color}; font-weight:700;" onclick="${isIn ? '' : `editTxn(${t.id})`}">${sign}${currencySymbol()}${t.amount.toFixed(2)}</div>
         <button class="delete-btn" onclick="${isIn ? `deleteIncome(${t.id})` : `deleteTxn(${t.id})`}">×</button>
