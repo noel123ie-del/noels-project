@@ -1431,8 +1431,8 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
 </div>
 
 <!-- Back / Forward buttons (top-left) -->
-<button id="backBtn" onclick="goBack()" title="Back" style="display:none; position: fixed; top: 14px; left: 14px; width: 44px; height: 44px; border-radius: 50%; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); font-size: 1.3rem; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1002;">←</button>
-<button id="fwdBtn" onclick="goForward()" title="Forward" style="display:none; position: fixed; top: 14px; left: 64px; width: 44px; height: 44px; border-radius: 50%; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); font-size: 1.3rem; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1002;">→</button>
+<button id="backBtn" onclick="goBack()" title="Back" style="display:none; position: fixed; top: 14px; left: 14px; width: 44px; height: 44px; border-radius: 50%; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); font-size: 1.3rem; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9998;">←</button>
+<button id="fwdBtn" onclick="goForward()" title="Forward" style="display:none; position: fixed; top: 14px; left: 64px; width: 44px; height: 44px; border-radius: 50%; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); font-size: 1.3rem; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9998;">→</button>
 
 <!-- FAB - Floating Action Button (moved bottom-left to make room for chat) -->
 <button class="fab" onclick="switchSection(null, 'daily-log')" title="Quick add transaction" style="left: 24px; right: auto;">+</button>
@@ -3727,10 +3727,16 @@ let _editingTxnId = null;
 let _editingSelectedCat = null;
 
 function editTxn(id) {
-  const txn = txns.find(t => t.id === id);
-  if (!txn) return;
+  // Search both txns and income so income rows can also be edited
+  let txn = txns.find(t => t.id === id);
+  _editingIsIncome = false;
+  if (!txn) {
+    txn = income.find(t => t.id === id);
+    if (!txn) return;
+    _editingIsIncome = true;
+  }
   _editingTxnId = id;
-  _editingSelectedCat = txn.category;
+  _editingSelectedCat = txn.category || (_editingIsIncome ? 'Income' : '');
 
   document.getElementById('editTxnDesc').textContent = txn.desc;
   document.getElementById('editTxnMeta').textContent = `${txn.date} · ${txn.account || ''}`;
@@ -3774,7 +3780,8 @@ function closeEditTxnModal() {
 
 function saveEditTxnModal() {
   if (!_editingTxnId) return closeEditTxnModal();
-  const txn = txns.find(t => t.id === _editingTxnId);
+  const arr = _editingIsIncome ? income : txns;
+  const txn = arr.find(t => t.id === _editingTxnId);
   if (!txn) return closeEditTxnModal();
 
   snapshotForUndo(`Edit "${txn.desc}"`);
@@ -3785,11 +3792,11 @@ function saveEditTxnModal() {
   const oldCat = txn.category;
   if (_editingSelectedCat && _editingSelectedCat !== oldCat) {
     txn.category = _editingSelectedCat;
-    learnCategoryRule(txn.desc, _editingSelectedCat);
+    if (!_editingIsIncome) learnCategoryRule(txn.desc, _editingSelectedCat);
     if (document.getElementById('editTxnApplyAll').checked) {
-      const same = txns.filter(t => t.id !== _editingTxnId && (t.desc || '').toLowerCase().trim() === (txn.desc || '').toLowerCase().trim() && t.category !== _editingSelectedCat);
+      const same = arr.filter(t => t.id !== _editingTxnId && (t.desc || '').toLowerCase().trim() === (txn.desc || '').toLowerCase().trim() && t.category !== _editingSelectedCat);
       same.forEach(t => t.category = _editingSelectedCat);
-      showToast(`✅ Updated ${same.length + 1} transactions to ${_editingSelectedCat}`);
+      showToast(`✅ Updated ${same.length + 1} ${_editingIsIncome ? 'income entries' : 'transactions'} to ${_editingSelectedCat}`);
     } else {
       showToast(`✅ Category changed to ${_editingSelectedCat}`);
     }
@@ -4808,6 +4815,10 @@ const BACKEND_URL = 'http://localhost:3001'; // Change to your deployed backend 
 let plaidHandler = null;
 
 function initPlaidLink() {
+  // Skip Plaid entirely unless a backend is configured (avoids cosmetic TypeError on load)
+  if (!BACKEND_URL || BACKEND_URL.includes('localhost') || typeof Plaid === 'undefined') {
+    return; // Demo mode — no fetch, no error
+  }
   fetch(`${BACKEND_URL}/api/plaid/create-link-token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -4826,13 +4837,9 @@ function initPlaidLink() {
           if (err) console.log('User exited Plaid:', err);
         }
       });
-    } else {
-      console.log('⚠️ Backend not running. Using demo mode.');
     }
   })
-  .catch(err => {
-    console.log('Backend error (demo mode):', err);
-  });
+  .catch(() => { /* silent — demo mode */ });
 }
 
 function openPlaidLink() {
@@ -7690,14 +7697,14 @@ function renderAllTransactions() {
       ? `<img class="receipt-thumb" src="${t.receipt}" onclick="event.stopPropagation();viewReceipt(${t.id})" title="View receipt">`
       : `<button class="delete-btn" onclick="event.stopPropagation();attachReceipt(${t.id})" title="Attach receipt photo" style="font-size:1rem;">📷</button>`) : '';
     return `
-    <div class="transaction-item" ${isIn ? '' : `onclick="editTxn(${t.id})" style="cursor:pointer;"`}>
+    <div class="transaction-item" onclick="editTxn(${t.id})" style="cursor:pointer;">
       <div class="transaction-info">
-        <div class="transaction-desc">${(t.desc || '').replace(/</g,'&lt;')}${taxBadge}${sourceBadge}${!isIn ? ' <span style="font-size:0.7rem;color:var(--text-muted);">✏️</span>' : ''}</div>
+        <div class="transaction-desc">${(t.desc || '').replace(/</g,'&lt;')}${taxBadge}${sourceBadge} <span style="font-size:0.7rem;color:var(--text-muted);">✏️</span></div>
         <div class="transaction-meta">${t.category || (isIn ? 'Income' : '—')} • ${t.account || '—'} • ${t.date}</div>
       </div>
       <div style="display: flex; align-items: center; gap: 8px;" onclick="event.stopPropagation()">
         ${receiptBtn}
-        <div class="transaction-amount" style="color:${color}; font-weight:700;" onclick="${isIn ? '' : `editTxn(${t.id})`}">${sign}${currencySymbol()}${t.amount.toFixed(2)}</div>
+        <div class="transaction-amount" style="color:${color}; font-weight:700;" onclick="editTxn(${t.id})">${sign}${currencySymbol()}${t.amount.toFixed(2)}</div>
         <button class="delete-btn" onclick="${isIn ? `deleteIncome(${t.id})` : `deleteTxn(${t.id})`}">×</button>
       </div>
     </div>`;
