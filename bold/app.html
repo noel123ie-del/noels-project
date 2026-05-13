@@ -1425,6 +1425,9 @@ Set <code>"banner": "Maintenance at 9pm"</code> to show non-blocking warning.<br
   </div>
 </div>
 
+<!-- Back button (top-left, only visible when there's history) -->
+<button id="backBtn" onclick="goBack()" title="Back" style="display:none; position: fixed; top: 14px; left: 14px; width: 44px; height: 44px; border-radius: 50%; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); font-size: 1.3rem; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1002;">←</button>
+
 <!-- FAB - Floating Action Button (moved bottom-left to make room for chat) -->
 <button class="fab" onclick="switchSection(null, 'daily-log')" title="Quick add transaction" style="left: 24px; right: auto;">+</button>
 
@@ -3614,7 +3617,8 @@ function save() {
   localStorage.setItem('contextBudgets', JSON.stringify(contextBudgets));
 }
 
-function switchSection(event, sectionId) {
+window._navHistory = window._navHistory || ['dashboard'];
+function switchSection(event, sectionId, _fromBack) {
   if (event) event.preventDefault();
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn, .emoji-nav button').forEach(b => b.classList.remove('active'));
@@ -3626,8 +3630,26 @@ function switchSection(event, sectionId) {
     while (btn && btn.tagName !== 'BUTTON') btn = btn.parentElement;
     if (btn) btn.classList.add('active');
   }
+  // Track nav history for back button
+  if (!_fromBack) {
+    const last = window._navHistory[window._navHistory.length - 1];
+    if (last !== sectionId) window._navHistory.push(sectionId);
+    if (window._navHistory.length > 20) window._navHistory.shift();
+  }
+  const backBtn = document.getElementById('backBtn');
+  if (backBtn) backBtn.style.display = window._navHistory.length > 1 ? 'block' : 'none';
   render();
   window.scrollTo(0, 0);
+}
+function goBack() {
+  if (window._navHistory.length <= 1) return;
+  window._navHistory.pop(); // remove current
+  const prev = window._navHistory[window._navHistory.length - 1];
+  switchSection(null, prev, true);
+  // Re-activate the matching nav button
+  document.querySelectorAll('.nav-btn, .emoji-nav button').forEach(b => {
+    if ((b.getAttribute('onclick') || '').includes(`'${prev}'`)) b.classList.add('active');
+  });
 }
 
 function setTransactionType(type) {
